@@ -41,8 +41,8 @@ const MOCK = (function () {
   // A newly created account: some starting funds, no tasks, so the setup suggestions are what fills the screen.
   function freshState() {
     return {
-      balance: 100, totalSent: 0, defaultPenalty: 5, selectedCharityId: 'ocean', charities: charities(), tasks: [],
-      activity: [{ icon: '💰', text: 'Account funded with $100.00', at: Date.now(), type: 'funds' }]
+      balance: 500, totalSent: 0, defaultPenalty: 5, selectedCharityId: 'ocean', charities: charities(), tasks: [],
+      activity: [{ icon: '💰', text: 'Account funded with $500.00', at: Date.now(), type: 'funds' }]
     };
   }
 

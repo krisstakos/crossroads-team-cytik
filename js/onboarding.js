@@ -86,6 +86,7 @@ const ONBOARDING = (function () {
       : '';
     return `<p class="onb-count">${n} of 4${s.multi ? ', pick any' : ''}</p>
       <h1 id="onb-title">${esc(s.title)}</h1>
+      ${s.id === 'stake' ? '<p class="sub onb-note">Your stake is the money you put on the line for each task. Finish it on time and you keep it. Miss the deadline and it goes to your chosen charity.</p>' : ''}
       <div class="tiles${s.multi ? ' multi' : ''}" role="${s.multi ? 'group' : 'radiogroup'}" aria-labelledby="onb-title">${tiles}</div>${custom}`;
   }
 

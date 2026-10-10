@@ -942,7 +942,7 @@ function downscaleFile(file) {
   });
 }
 
-/* ---------- proof flow: mocked AI verification ---------- */
+/* ---------- proof flow: AI verification (POST /api/verify-proof, Claude vision) ---------- */
 function resetAnalysisUI() {
   $$('#pf-step-list li').forEach(li => li.classList.remove('active', 'done'));
   $('#pf-result').classList.add('hidden');
@@ -951,15 +951,22 @@ function resetAnalysisUI() {
   $('#pf-conf-fill').style.width = '0%';
 }
 
-function pickDetected(t, pass) {
-  if (!pass) return ['indistinct objects', 'low match with task context'];
-  return MOCK.DETECTIONS[t.icon] || ['scene elements', 'consistent lighting', 'natural composition'];
-}
-
 async function runAnalysis() {
   showPfStage('analysis');
   $('#pf-image').src = pf.image;
   const t = taskById(pf.taskId);
+
+  // Fire the request now; the step animation runs alongside it
+  const request = fetch('/api/verify-proof', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task: t.name, image: pf.image })
+  }).then(async res => {
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || 'Verification failed');
+    return body;
+  });
+  request.catch(() => {});
 
   for (const li of $$('#pf-step-list li')) {
     li.classList.add('active');
@@ -967,18 +974,31 @@ async function runAnalysis() {
     li.classList.remove('active');
     li.classList.add('done');
   }
-  await sleep(450);
 
-  const confidence = Math.round(78 + Math.random() * 21);
-  const pass = confidence >= 80;
-  pf.result = {
-    verdict: pass ? 'verified' : 'rejected',
-    confidence,
-    detected: pickDetected(t, pass),
-    note: (pass ? MOCK.NOTES_PASS : MOCK.NOTES_FAIL)[Math.floor(Math.random() * (pass ? MOCK.NOTES_PASS.length : MOCK.NOTES_FAIL.length))],
-    at: Date.now()
-  };
+  let data;
+  try {
+    data = await request;
+  } catch (e) {
+    // No verdict means no completion: the user can only retry
+    pf.result = null;
+    renderPfError(e.message);
+    return;
+  }
+  pf.result = { ...data, at: Date.now() };
   renderPfResult();
+}
+
+function renderPfError(msg) {
+  const icon = $('#pf-verdict-icon');
+  icon.textContent = '!';
+  icon.classList.add('fail');
+  $('#pf-verdict-title').textContent = "Couldn't check your photo";
+  $('#pf-verdict-sub').textContent = `${msg} The task stays open and the timer keeps running.`;
+  $('#pf-conf-text').textContent = '–';
+  $('#pf-conf-fill').style.width = '0%';
+  $('#pf-detected').innerHTML = '';
+  $('#pf-result').classList.remove('hidden');
+  $('#btn-pf-retake').classList.remove('hidden');
 }
 
 function renderPfResult() {
@@ -987,8 +1007,10 @@ function renderPfResult() {
   const icon = $('#pf-verdict-icon');
   icon.textContent = pass ? '✓' : '✕';
   icon.classList.toggle('fail', !pass);
-  $('#pf-verdict-title').textContent = pass ? 'Verified' : "Couldn't verify";
-  $('#pf-verdict-sub').textContent = pass ? '' : 'Try again. The timer is still running.';
+  $('#pf-verdict-title').textContent = pass ? 'Verified!' : "Couldn't verify";
+  $('#pf-verdict-sub').textContent = pass
+    ? 'This photo looks like genuine proof of your task.'
+    : `${r.note} Try again — the timer keeps running.`;
   $('#pf-conf-text').textContent = r.confidence + '%';
   requestAnimationFrame(() => { $('#pf-conf-fill').style.width = r.confidence + '%'; });
   $('#pf-result').classList.remove('hidden');
@@ -1259,7 +1281,7 @@ function bindEvents() {
   });
   $('#btn-pf-done').addEventListener('click', () => {
     const t = taskById(pf.taskId);
-    if (!t) return;
+    if (!t || !pf.result || pf.result.verdict !== 'verified') return;
     closeProofFlow();
     completeTask(t, { image: pf.image, ai: pf.result });
   });
