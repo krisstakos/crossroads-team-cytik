@@ -4,12 +4,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { REPO } from './lib.mjs';
-import { FILM_A, FILM_B } from '../animatic/scenes.mjs';
+import { FILMS } from '../animatic/scenes.mjs';
 
 const SRC = path.join(REPO, 'video/screens/dark');
 const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-for (const [dir, film] of [['option-a', FILM_A], ['option-b', FILM_B]]) {
+for (const [key, film] of Object.entries(FILMS)) {
+  const dir = `option-${key}`;
   const out = path.join(REPO, 'video/inserts', dir);
   fs.rmSync(out, { recursive: true, force: true });
   fs.mkdirSync(out, { recursive: true });

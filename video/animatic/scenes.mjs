@@ -48,6 +48,9 @@ export const FILM_B = {
   ]
 };
 
+// Every film in this file. The tools render and pack whatever is listed here.
+export const FILMS = { a: FILM_A, b: FILM_B };
+
 // Flatten sfx into absolute-time events for the renderer and the score.
 export function eventsOf(film) {
   return film.scenes.flatMap(s => (s.sfx || []).map(e => ({ type: e.type, t: s.t0 + e.at }))).sort((a, b) => a.t - b.t);

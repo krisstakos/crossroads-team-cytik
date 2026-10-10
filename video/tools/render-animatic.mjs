@@ -1,6 +1,6 @@
 // Renders the animatics to MP4 (720x1280, 30 fps, H.264 + AAC).
 // Usage:  npm run films                       renders both
-//         node tools/render-animatic.mjs a    renders option A only
+//         node tools/render-animatic.mjs a    renders one film by its key (a or b)
 //         node tools/render-animatic.mjs b --stills 5,48,80   writes PNG stills at those seconds instead (quick look check)
 // Needs ffmpeg and python3 on PATH, or set FFMPEG=/path/to/ffmpeg and PYTHON=/path/to/python3.
 import fs from 'node:fs';
@@ -9,16 +9,16 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { chromium } from 'playwright';
 import { startServer, REPO } from './lib.mjs';
-import { FILM_A, FILM_B, eventsOf } from '../animatic/scenes.mjs';
+import { FILMS, eventsOf } from '../animatic/scenes.mjs';
 
 const FFMPEG = process.env.FFMPEG || 'ffmpeg';
 const PYTHON = process.env.PYTHON || 'python3';
 const FPS = 30;
 const args = process.argv.slice(2);
-const which = (args.find(a => ['a', 'b', 'all'].includes(a)) || 'all');
+const which = args.find(a => a === 'all' || a in FILMS) || 'all';
 const stillsArg = args.includes('--stills') ? args[args.indexOf('--stills') + 1] : null;
-const films = { a: FILM_A, b: FILM_B };
-const todo = which === 'all' ? ['a', 'b'] : [which];
+const films = FILMS;
+const todo = which === 'all' ? Object.keys(FILMS) : [which];
 
 const OUT = path.join(REPO, 'video/films');
 fs.mkdirSync(OUT, { recursive: true });
