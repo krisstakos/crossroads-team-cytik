@@ -221,30 +221,10 @@
       <div class="page-head"><h1>Shop</h1></div>
 
       <div class="shop-stack">
-        <div class="card shop-balance">
-          <div>
-            <p class="sub">Your tickets</p>
-            <p class="ledger-balance" id="shop-tickets">0</p>
-          </div>
-          <div class="shop-wallet">
-            <p class="sub">Balance</p>
-            <p><strong id="shop-balance">$0.00</strong></p>
-          </div>
-        </div>
-
-        <div class="card settings-card">
-          <h3>Bail-out ticket</h3>
-          <p class="sub">Truly blocked from finishing a task? Use a ticket to clear it. You keep your stake, nothing goes to charity, and the task doesn't count as missed. A used ticket is gone. Each costs <b id="shop-price">$1</b> from your balance.</p>
-          <div class="shop-packs gap-top" id="shop-packs"></div>
-          <p class="hint" id="shop-note"></p>
-        </div>
-
-        <div class="card settings-card">
-          <div class="row-between"><h3>One more try</h3><b class="num" id="shop-retries">0</b></div>
-          <p class="sub">After a miss you can try again. You get <b>4 free a month</b>; more cost <b id="shop-retry-price">$1</b> each and never expire.</p>
-          <p class="hint" id="shop-retry-free"></p>
-          <div class="shop-packs gap-top" id="shop-retry-packs"></div>
-        </div>
+        <div class="card shop-wallet-card" id="shop-wallet"></div>
+        <div id="shop-items" class="shop-items" role="group" aria-label="Ticket types, swipe to switch" tabindex="0"></div>
+        <div id="shop-dots" class="shop-dots"></div>
+        <p class="hint" id="shop-note"></p>
       </div>
     </section>
 

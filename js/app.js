@@ -653,30 +653,81 @@ async function bailOut(id) {
   toast(`Cleared "${t.name}". ${state.tickets} ticket${state.tickets === 1 ? '' : 's'} left`, 'success');
 }
 
-/* ---------- shop: bail-out tickets ---------- */
+/* ---------- shop: two kinds of ticket ---------- */
+// Both are bought the same way and described the same way; only what they do differs.
+const SHOP_ITEMS = [
+  {
+    id: 'bail', icon: '🎫', name: 'Bail-out ticket', unit: ['ticket', 'tickets'], price: () => TICKET_PRICE, packs: TICKET_PACKS, buyAttr: 'data-buy',
+    when: 'Truly blocked from finishing a task',
+    owned: () => state.tickets,
+    sub: () => 'Never expire',
+    how: ['Clears the task: you keep your stake', 'Nothing goes to charity', "The task doesn't count as missed", 'A used ticket is gone']
+  },
+  {
+    id: 'retry', icon: '↩️', name: 'One more try', unit: ['retry', 'retries'], price: () => RETRY_PRICE, packs: RETRY_PACKS, buyAttr: 'data-buy-retry',
+    when: 'After a miss, to have another go',
+    owned: () => retriesLeft(),
+    sub: () => `${freeRetriesLeft()} of ${RETRIES_PER_MONTH} free this month${state.extraRetries ? `, ${state.extraRetries} bought` : ''}`,
+    how: [`${RETRIES_PER_MONTH} free every month, used first`, 'Bought retries never expire', 'Pick a new deadline for the same task']
+  }
+];
+
+const plural = (n, [one, many]) => (n === 1 ? one : many);
+
+function shopItemHTML(it) {
+  const price = it.price();
+  const packs = it.packs.map(n => {
+    const cost = n * price;
+    return `<div class="shop-pack">
+      <div><b>${n} ${plural(n, it.unit)}</b><small>${fmtMoney(cost)}${n > 1 ? ` · ${fmtMoney(price)} each` : ''}</small></div>
+      <button class="btn ghost sm" ${it.buyAttr}="${n}" ${cost > spendable() ? 'disabled' : ''}>Buy</button>
+    </div>`;
+  }).join('');
+  return `<section class="card shop-item" aria-labelledby="shop-${it.id}-title">
+    <header class="shop-item-head">
+      <span class="shop-item-ico" aria-hidden="true">${it.icon}</span>
+      <div><h3 id="shop-${it.id}-title">${it.name}</h3><p class="sub">${it.when}</p></div>
+      <div class="shop-item-own"><b class="num">${it.owned()}</b><small>${plural(it.owned(), it.unit)}</small></div>
+    </header>
+    <p class="shop-status">${it.sub()}</p>
+    <ul class="shop-how">${it.how.map(h => `<li>${h}</li>`).join('')}</ul>
+    <p class="shop-price-line">${fmtMoney(price)} each, from your balance</p>
+    <div class="shop-packs">${packs}</div>
+  </section>`;
+}
+
+// The deck swipes sideways; the card nearest the middle is the one in front.
+function shopCardIndex() {
+  const deck = $('#shop-items');
+  const mid = deck.scrollLeft + deck.clientWidth / 2;
+  const cards = [...deck.children];
+  let best = 0;
+  cards.forEach((c, i) => { if (Math.abs(c.offsetLeft + c.offsetWidth / 2 - mid) < Math.abs(cards[best].offsetLeft + cards[best].offsetWidth / 2 - mid)) best = i; });
+  return best;
+}
+function markShopCard() {
+  const at = shopCardIndex();
+  [...$('#shop-items').children].forEach((c, i) => c.classList.toggle('front', i === at));
+  $$('.shop-dot, .shop-inv').forEach(b => { const on = +b.dataset.shopCard === at; b.classList.toggle('on', on); b.setAttribute('aria-current', on ? 'true' : 'false'); });
+}
+function showShopCard(i) {
+  const c = $('#shop-items').children[i];
+  if (c) $('#shop-items').scrollTo({ left: c.offsetLeft - ($('#shop-items').clientWidth - c.offsetWidth) / 2, behavior: reduceMotion() ? 'auto' : 'smooth' });
+}
+
 function renderShop() {
-  $('#shop-tickets').textContent = state.tickets;
-  $('#shop-balance').textContent = fmtMoney(state.balance);
-  $('#shop-price').textContent = fmtMoney(TICKET_PRICE);
-  $('#shop-packs').innerHTML = TICKET_PACKS.map(n => {
-    const cost = n * TICKET_PRICE;
-    return `<div class="shop-pack">
-      <div><b>${n} ticket${n > 1 ? 's' : ''}</b><small>${fmtMoney(cost)}</small></div>
-      <button class="btn ghost sm" data-buy="${n}" ${cost > spendable() ? 'disabled' : ''}>Buy</button>
+  $('#shop-wallet').innerHTML = `
+    <div class="shop-wallet-main"><p class="sub">Balance</p><p class="ledger-balance">${fmtMoney(state.balance)}</p></div>
+    <div class="shop-inventory" role="list" aria-label="What you own">
+      ${SHOP_ITEMS.map((it, i) => `<button type="button" class="shop-inv" role="listitem" data-shop-card="${i}" aria-label="Show ${it.name}"><span aria-hidden="true">${it.icon}</span><b class="num">${it.owned()}</b><small>${plural(it.owned(), it.unit)}</small></button>`).join('')}
     </div>`;
-  }).join('');
-  const free = freeRetriesLeft();
-  $('#shop-retries').textContent = retriesLeft();
-  $('#shop-retry-free').textContent = `${free} of ${RETRIES_PER_MONTH} free this month${state.extraRetries ? `, ${state.extraRetries} bought` : ''}`;
-  $('#shop-retry-price').textContent = fmtMoney(RETRY_PRICE);
-  $('#shop-retry-packs').innerHTML = RETRY_PACKS.map(n => {
-    const cost = n * RETRY_PRICE;
-    return `<div class="shop-pack">
-      <div><b>${n} ${n > 1 ? 'retries' : 'retry'}</b><small>${fmtMoney(cost)}</small></div>
-      <button class="btn ghost sm" data-buy-retry="${n}" ${cost > spendable() ? 'disabled' : ''}>Buy</button>
-    </div>`;
-  }).join('');
-  $('#shop-note').textContent = spendable() < TICKET_PRICE ? 'Add funds in Settings to buy tickets.' : '';
+  const deck = $('#shop-items');
+  const keep = deck.scrollLeft;                                    // a re-render after a purchase must not jump back to the first card
+  deck.innerHTML = SHOP_ITEMS.map(shopItemHTML).join('');
+  $('#shop-dots').innerHTML = SHOP_ITEMS.map((it, i) => `<button type="button" class="shop-dot" data-shop-card="${i}" aria-label="${it.name}"></button>`).join('');
+  deck.scrollLeft = keep;
+  markShopCard();
+  $('#shop-note').textContent = spendable() < Math.min(...SHOP_ITEMS.map(it => it.price())) ? 'Add funds in Settings to buy tickets.' : '';
 }
 
 function buyRetries(n) {
@@ -1540,6 +1591,11 @@ function bindEvents() {
     const r = e.target.closest('[data-report]'); if (r) openReport(r.dataset.report);
     const s = e.target.closest('[data-select]'); if (s) selectCharity(s.dataset.select);
   });
+
+  // shop deck: swipe, or tap a counter or dot, to bring a card to the front
+  let shopRaf = 0;
+  $('#shop-items').addEventListener('scroll', () => { cancelAnimationFrame(shopRaf); shopRaf = requestAnimationFrame(markShopCard); }, { passive: true });
+  $('#view-shop').addEventListener('click', e => { const b = e.target.closest('[data-shop-card]'); if (b) showShopCard(+b.dataset.shopCard); });
 
   // settings
   $('#funds-chips').addEventListener('click', e => {

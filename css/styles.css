@@ -830,8 +830,6 @@ body:not([data-view="home"]) .fab{display:none}
 .topbar-extras{display:flex;gap:10px;align-self:flex-end}
 .topbar-pills #topbar-tickets,.topbar-pills #topbar-retries{font-size:11.5px;font-weight:500;color:var(--muted)}
 .shop-stack{display:flex;flex-direction:column;gap:16px;max-width:560px}
-.shop-balance{display:flex;justify-content:space-between;align-items:flex-end;padding:20px}
-.shop-wallet{text-align:right}
 .shop-packs{display:flex;flex-direction:column;gap:10px}
 .shop-pack{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
 .shop-pack b{font-size:15px}
@@ -870,3 +868,36 @@ html.embedded,html.embedded body{overflow-x:hidden}
 .pick.partner .p-offer,.pick.partner .p-terms{margin-left:16px;margin-right:16px}
 .pick.partner .p-terms{margin-bottom:12px}
 .pick.partner .pick-text small{opacity:.75;font-size:12.5px}
+
+/* shop layout: wallet and inventory on top, then one card per ticket type */
+.shop-wallet-card{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:20px}
+.shop-inventory{display:flex;gap:10px}
+.shop-inv{display:flex;flex-direction:column;align-items:center;min-width:74px;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+.shop-inv b{font-size:20px;line-height:1.2}
+.shop-inv small{color:var(--muted);font-size:11.5px}
+.shop-items{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;padding:6px 0 10px;margin:0 -4px;overscroll-behavior-x:contain}
+.shop-items::-webkit-scrollbar{display:none}
+.shop-items .shop-item{flex:0 0 88%;scroll-snap-align:center;transform:scale(.94);opacity:.55;transition:transform .25s var(--ease),opacity .25s var(--ease)}
+.shop-items .shop-item.front{transform:none;opacity:1;box-shadow:var(--shadow-md)}
+.shop-items:first-child{padding-left:4px}
+.shop-dots{display:flex;justify-content:center;gap:8px}
+.shop-dot{width:8px;height:8px;border-radius:50%;background:var(--surface-3);transition:width .2s,background .2s}
+.shop-dot.on{width:22px;border-radius:6px;background:var(--accent)}
+button.shop-inv{cursor:pointer;color:inherit;font:inherit}
+.shop-inv.on{border-color:var(--accent);background:var(--accent-soft)}
+.shop-item{padding:18px}
+.shop-item-head{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px}
+.shop-item-head h3{margin:0}
+.shop-item-head .sub{margin:2px 0 0}
+.shop-item-ico{display:grid;place-items:center;width:44px;height:44px;border-radius:12px;background:var(--accent-soft);border:1px solid var(--accent-line);font-size:22px}
+.shop-item-own{text-align:right}
+.shop-item-own b{display:block;font-size:22px;line-height:1.1}
+.shop-item-own small{display:block;color:var(--muted);font-size:11.5px}
+.shop-item-head>div:nth-child(2){min-width:0;text-align:left}
+.shop-item-head .sub{line-height:1.35}
+.shop-status{margin:12px 0 0;padding:6px 10px;border-radius:8px;background:var(--surface-2);color:var(--muted);font-size:12.5px;text-align:left}
+.shop-how{margin:14px 0 0;padding:0;list-style:none;display:grid;gap:6px;font-size:13.5px;color:var(--muted)}
+.shop-how li{position:relative;padding-left:20px}
+.shop-how li::before{content:'✓';position:absolute;left:0;color:var(--accent-text);font-weight:700}
+.shop-price-line{margin:14px 0 8px;font-size:12.5px;color:var(--muted)}
+@media (max-width:420px){.shop-wallet-card{flex-direction:column;align-items:stretch}.shop-inventory{justify-content:space-between}.shop-inv{flex:1}}
