@@ -237,7 +237,6 @@ function registerAccount(v) {
   stored[u] = { password: v.password, name: v.name.trim(), createdAt: Date.now() };
   localStorage.setItem(LS_USERS, JSON.stringify(stored));
   startSession(u, { registered: true });
-  toast('Account created', 'success');
   return null;
 }
 
@@ -257,6 +256,7 @@ function showView(name) {
     if (b.classList.contains('nav-item') || b.classList.contains('bn-item')) on ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current');
   });
   window.scrollTo({ top: 0 });
+  document.body.dataset.view = name;
   if (name === 'record' && state) playRecordCounters();
 }
 
@@ -330,14 +330,14 @@ const prefsFromProfile = () => (state && state.profile ? { when: state.profile.w
 
 /* ---------- recommended tasks ---------- */
 const RECOMMENDED = [
-  { name: 'Gym visit',       icon: '🏋️', h: 2, m: 0,  stake: 10, tint: '#ffb020', why: 'The classic. Photo of the gym floor.' },
-  { name: 'Morning run',     icon: '🏃', h: 1, m: 0,  stake: 5,  tint: '#7fd3e6', why: 'Short, measurable, easy to prove.' },
-  { name: 'Study session',   icon: '📚', h: 1, m: 0,  stake: 5,  tint: '#9fb4c3', why: 'Open books on a desk is enough.' },
-  { name: 'Deep work block', icon: '💻', h: 2, m: 0,  stake: 10, tint: '#35e0ff', why: 'Two focused hours on one thing.' },
-  { name: 'Cook dinner',     icon: '🍳', h: 1, m: 0,  stake: 5,  tint: '#ffb020', why: 'Skip the takeout, save the stake.' },
-  { name: 'Tidy the room',   icon: '🧹', h: 0, m: 30, stake: 3,  tint: '#1fb6d4', why: 'A small win in 30 minutes.' },
-  { name: 'Yoga or stretch', icon: '🧘', h: 0, m: 30, stake: 5,  tint: '#9fb4c3', why: 'Mat on the floor counts.' },
-  { name: 'Water the plants', icon: '🌿', h: 0, m: 30, stake: 3, tint: '#7fd3e6', why: 'Easy streak starter.' }
+  { name: 'Gym visit',       icon: '🏋️', h: 2, m: 0,  stake: 10 },
+  { name: 'Morning run',     icon: '🏃', h: 1, m: 0,  stake: 5 },
+  { name: 'Study session',   icon: '📚', h: 1, m: 0,  stake: 5 },
+  { name: 'Deep work block', icon: '💻', h: 2, m: 0,  stake: 10 },
+  { name: 'Cook dinner',     icon: '🍳', h: 1, m: 0,  stake: 5 },
+  { name: 'Tidy the room',   icon: '🧹', h: 0, m: 30, stake: 3 },
+  { name: 'Yoga or stretch', icon: '🧘', h: 0, m: 30, stake: 5 },
+  { name: 'Water the plants', icon: '🌿', h: 0, m: 30, stake: 3 }
 ];
 
 function recommendedTasks() {
@@ -357,7 +357,7 @@ function renderRecommended() {
   const list = recommendedTasks().slice(0, 7);
   $('#reco-title').classList.toggle('hidden', !list.length);
   $('#recommended').innerHTML = list.map((r, i) => `
-    <article class="reco" style="--tint:${r.tint};--i:${i + 2}">
+    <article class="reco" style="--i:${i + 2}">
       <div class="reco-top">
         <div class="reco-icon" aria-hidden="true">${r.icon}</div>
         <div><h3>${esc(r.name)}</h3></div>
@@ -386,7 +386,6 @@ function renderHome() {
   line.classList.toggle('hidden', !active.length);
 
   const list = $('#tasks-active-list');
-  list.classList.toggle('solo', active.length <= 1);
   list.innerHTML = active.length
     ? taskCardHTML(active[0], true) + (active.length > 1 ? `<div class="rest">${active.slice(1).map(t => taskCardHTML(t, false)).join('')}</div>` : '')
     : '';
@@ -651,6 +650,49 @@ function setAddMode(mode) {
   updateAddAssist();
 }
 
+// Named shortcuts resolve to a date and a time ("Friday" means Friday 6 PM). Returns null when it is too late for today's.
+function dateShortcut(key, now = new Date()) {
+  const at = (d, h, m = 0) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m);
+  const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  const soon = t => t.getTime() - now.getTime() < MIN_LEAD_MS;
+  if (key === 'tonight') {
+    let t = at(now, 21);
+    if (soon(t)) t = at(now, 23);
+    return soon(t) ? null : t;
+  }
+  if (key === 'friday') {
+    const add = (5 - now.getDay() + 7) % 7;
+    let t = at(addDays(now, add), 18);
+    if (soon(t)) t = addDays(t, 7);
+    return t;
+  }
+  if (key === 'weekend') {                       // the end of the weekend: Sunday 6 PM
+    const add = (7 - now.getDay()) % 7;
+    let t = at(addDays(now, add), 18);
+    if (soon(t)) t = addDays(t, 7);
+    return t;
+  }
+  if (key === 'monthend') {
+    let t = at(new Date(now.getFullYear(), now.getMonth() + 1, 0), 18);
+    if (soon(t)) t = at(new Date(now.getFullYear(), now.getMonth() + 2, 0), 18);
+    return t;
+  }
+  return null;
+}
+
+function setDateShortcut(key) {
+  const t = dateShortcut(key);
+  if (!t) return;
+  $('#at-date').value = localDate(t);
+  $('#at-time').value = `${pad(t.getHours())}:${pad(t.getMinutes())}`;
+  $$('#date-presets .chip').forEach(c => c.classList.toggle('active', c.dataset.when === key));
+  updateDuePreview();
+  updateAddAssist();
+}
+
+// a shortcut that has no valid time left today (like "Tonight" at midnight) is greyed out
+const refreshShortcuts = () => $$('#date-presets [data-when]').forEach(c => { c.disabled = !dateShortcut(c.dataset.when); });
+
 function setDatePreset(days) {
   const d = new Date();
   d.setDate(d.getDate() + days);
@@ -687,7 +729,7 @@ async function updateAddAssist() {
   const [where, help] = await Promise.all([ASSIST.whereFor(task, mins, prefsFromProfile()), ASSIST.load(task, mins, prefsFromProfile())]);
   if (token !== assistToken) return;            // a newer edit already replaced this answer
   box.classList.toggle('hidden', !where);
-  box.innerHTML = where ? `${ASSIST.whereHTML(where)}${help ? '<button type="button" class="link-btn" id="at-assist-more">See details</button>' : ''}` : '';
+  box.innerHTML = where ? `${ASSIST.whereHTML(where, true)}${help ? '<button type="button" class="link-btn" id="at-assist-more">See details</button>' : ''}` : '';
 }
 
 function openAddTask(preset) {
@@ -704,6 +746,7 @@ function openAddTask(preset) {
   $('#at-time').value = '18:00';
   $('#at-date').min = localDate(new Date());
   setDatePreset(1);                                  // the date picker starts on tomorrow
+  refreshShortcuts();
   setAddMode('duration');
   $('#overlay-add').classList.remove('hidden');
   document.body.classList.add('no-scroll');
@@ -1036,7 +1079,10 @@ function setAuthMode(mode) {
   $('#auth-signup').classList.toggle('hidden', mode !== 'signup');
   $('#login-error').classList.add('hidden');
   $('#login-to-signup').classList.add('hidden');
-  setTimeout(() => $(mode === 'signup' ? '#reg-name' : '#login-user').focus(), 30);
+  setTimeout(() => {
+    const a = document.activeElement;
+    if (!a || a === document.body || a.classList.contains('seg-btn')) $(mode === 'signup' ? '#reg-name' : '#login-user').focus();
+  }, 30);
 }
 
 // Shows a message under each field that has been touched (or every field, after a submit attempt).
@@ -1146,7 +1192,12 @@ function bindEvents() {
   ['#at-name', '#at-hours', '#at-minutes', '#at-date', '#at-time'].forEach(sel => $(sel).addEventListener('input', () => { updateDuePreview(); updateAddAssist(); }));
   $('#at-date').addEventListener('input', () => $$('#date-presets .chip').forEach(c => c.classList.remove('active')));
   $$('.seg-btn').forEach(b => b.addEventListener('click', () => setAddMode(b.dataset.mode)));
-  $('#date-presets').addEventListener('click', e => { const c = e.target.closest('[data-days]'); if (c) setDatePreset(+c.dataset.days); });
+  $('#date-presets').addEventListener('click', e => {
+    const c = e.target.closest('.chip');
+    if (!c || c.disabled) return;
+    if (c.dataset.when) setDateShortcut(c.dataset.when);
+    else if (c.dataset.days) setDatePreset(+c.dataset.days);
+  });
   $('#at-assist').addEventListener('click', e => {
     if (!e.target.closest('#at-assist-more')) return;
     const r = computeDeadline();

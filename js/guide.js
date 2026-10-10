@@ -127,19 +127,27 @@ const GUIDE = (function () {
   };
 
   /* ---------- picking three tasks ---------- */
+  // `a` holds single answers (the chat: blocker, when, time) or lists (onboarding: blockers, whens).
+  // With no time answer, every task keeps its natural length.
   function suggest(a, count = 3) {
-    const cap = Math.min(a.time.cap, a.blocker.id === 'busy' ? 30 : Infinity);
-    const target = BLOCKER.target[a.blocker.id];
+    const blockers = a.blockers || (a.blocker ? [a.blocker.id] : []);
+    const whens = a.whens || (a.when ? [a.when.id] : []);
+    const baseCap = a.time ? a.time.cap : Infinity;
+    const cap = Math.min(baseCap, blockers.includes('busy') ? 30 : Infinity);
+    const targets = blockers.map(id => BLOCKER.target[id]);
+    const target = targets.length ? targets.reduce((x, y) => x + y, 0) / targets.length : 2;      // several blockers: aim for the middle
+    const anyTime = !whens.length || whens.includes('varies');
     const roundTo = m => (m <= 15 ? 15 : m <= 30 ? 30 : m <= 45 ? 45 : m <= 60 ? 60 : m <= 90 ? 90 : 120);
     const stake = Math.max(1, Math.min(a.stake.id, Math.floor(state.balance) || 1));
+    const fitOpt = BLOCKER.options.find(o => o.id === blockers[0]);
     const pool = (CATALOGUE[a.area.id] || []).filter(t => t.mins <= cap * 2);
     return pool
-      .map((t, i) => ({ t, i, score: -Math.abs(t.diff - target) + (a.when.id === 'varies' || t.when.includes(a.when.id) ? 0.6 : 0) }))
+      .map((t, i) => ({ t, i, score: -Math.abs(t.diff - target) + (anyTime || whens.some(w => t.when.includes(w)) ? 0.6 : 0) }))
       .sort((x, y) => y.score - x.score || x.i - y.i)
       .slice(0, count)
       .map(({ t }) => {
         const mins = roundTo(Math.min(t.mins, cap));
-        return { name: t.name, icon: t.icon, h: Math.floor(mins / 60), m: mins % 60, stake, pitch: t.pitch, fit: a.blocker.fit };
+        return { name: t.name, icon: t.icon, h: Math.floor(mins / 60), m: mins % 60, stake, pitch: t.pitch, fit: fitOpt && fitOpt.fit };
       });
   }
 
@@ -258,7 +266,7 @@ const GUIDE = (function () {
     wrap.className = 'guide-sugg';
     wrap.innerHTML = results.map((r, i) => {
       const len = `${r.h ? r.h + 'h' : ''}${r.m ? (r.h ? ' ' : '') + r.m + 'm' : ''}`;
-      return `<article class="reco" style="--tint:${['#35e0ff', '#7fd3e6', '#9fb4c3'][i]};--i:${i}">
+      return `<article class="reco" style="--i:${i}">
         <div class="reco-top"><div class="reco-icon" aria-hidden="true">${r.icon}</div>
           <div><h3>${esc(r.name)}</h3></div></div>
         <div class="reco-meta"><div><b>${len}</b></div><div><b>${fmtMoney(r.stake)}</b></div></div>

@@ -23,9 +23,8 @@ const ONBOARDING = (function () {
   const STEPS = [
     { id: 'welcome' },
     { id: 'area', multi: true, title: 'What do you want to work on?' },
-    { id: 'blocker', title: 'What gets in the way?' },
-    { id: 'when', title: 'When are you free?' },
-    { id: 'time', title: 'How long per task?' },
+    { id: 'blocker', multi: true, title: 'What gets in the way?' },
+    { id: 'when', multi: true, title: 'When are you free?' },
     { id: 'stake', title: 'How much will you stake?' },
     { id: 'results' }
   ];
@@ -33,19 +32,26 @@ const ONBOARDING = (function () {
   /* ---------- state ---------- */
   let step = 0;
   let dir = 1;                         // 1 forward, -1 back, for the slide direction
-  let sel = {};                        // answers: areas[], blocker, when, time, stake
+  let sel = {};                        // answers: areas[], blockers[], whens[], stake
   let picks = [];                      // suggested activities on the last screen
   let chosen = new Set();              // indexes of the ones ticked
   let renderToken = 0;
   let fresh = false;                   // true right after registration
 
   const el = id => document.getElementById(id);
-  const optionsFor = id => ({ area: GUIDE.AREA.options, blocker: GUIDE.BLOCKER.options, when: GUIDE.WHEN.options, time: GUIDE.TIME.options, stake: GUIDE.STAKE.options }[id]);
+  const optionsFor = id => ({ area: GUIDE.AREA.options, blocker: GUIDE.BLOCKER.options, when: GUIDE.WHEN.options, stake: GUIDE.STAKE.options }[id]);
+  // The three multiple-choice questions keep a list of answers. One option on each is exclusive.
+  const MULTI = { area: { key: 'areas', exclusive: 'unsure' }, blocker: { key: 'blockers', exclusive: null }, when: { key: 'whens', exclusive: 'varies' } };
+  // What the venue ranking needs: one time of day and one main blocker, drawn from the lists.
+  const prefs = () => ({
+    when: sel.whens.length === 1 ? sel.whens[0] : 'varies',
+    blocker: sel.blockers.includes('busy') ? 'busy' : sel.blockers.includes('energy') ? 'energy' : sel.blockers[0]
+  });
 
   /* ---------- picking activities ---------- */
   function activities() {
     const areas = sel.areas.includes('unsure') ? ['fitness', 'home', 'study'] : sel.areas;
-    const base = { blocker: sel.blocker, when: sel.when, time: sel.time, stake: sel.stake };
+    const base = { blockers: sel.blockers, whens: sel.whens, stake: sel.stake };
     const lists = areas.map(id => GUIDE.suggest({ ...base, area: { id } }, 3));
     const out = [];
     for (let i = 0; i < 3; i++) {                          // take one from each area in turn
@@ -69,41 +75,38 @@ const ONBOARDING = (function () {
   function questionHTML(s, n) {
     let tiles;
     if (s.id === 'area') {
-      tiles = AREA_TILES.map(t => tileHTML({ value: t.id, icon: t.icon, label: GUIDE.AREA.options.find(o => o.id === t.id).label, }, sel.areas.includes(t.id), true)).join('');
+      tiles = AREA_TILES.map(t => tileHTML({ value: t.id, icon: t.icon, label: GUIDE.AREA.options.find(o => o.id === t.id).label }, sel.areas.includes(t.id), true)).join('');
     } else if (s.id === 'stake') {
-      tiles = GUIDE.STAKE.options.map(o => tileHTML({ value: o.id, label: o.label, }, sel.stake && sel.stake.id === o.id && !sel.customStake, false)).join('');
+      tiles = GUIDE.STAKE.options.map(o => tileHTML({ value: o.id, label: o.label }, sel.stake && sel.stake.id === o.id && !sel.customStake, false)).join('');
     } else {
-      tiles = optionsFor(s.id).map(o => tileHTML({
-        value: o.id, label: o.label,
-        icon: s.id === 'when' ? WHEN_ICON[o.id] : ''
-      }, sel[s.id] && sel[s.id].id === o.id, false)).join('');
+      tiles = optionsFor(s.id).map(o => tileHTML({ value: o.id, label: o.label, icon: s.id === 'when' ? WHEN_ICON[o.id] : '' }, sel[MULTI[s.id].key].includes(o.id), true)).join('');
     }
     const custom = s.id === 'stake'
       ? `<label class="onb-custom"><span>Other amount</span><div><b>$</b><input id="onb-custom-stake" type="number" min="1" max="100" inputmode="numeric" value="${sel.customStake || ''}"/></div></label>`
       : '';
-    return `<p class="onb-count">${n} of 5</p>
+    return `<p class="onb-count">${n} of 4${s.multi ? ', pick any' : ''}</p>
       <h1 id="onb-title">${esc(s.title)}</h1>
-      <div class="tiles${s.id === 'area' ? ' wide' : ''}" role="${s.multi ? 'group' : 'radiogroup'}" aria-labelledby="onb-title">${tiles}</div>${custom}`;
+      <div class="tiles${s.multi ? ' multi' : ''}" role="${s.multi ? 'group' : 'radiogroup'}" aria-labelledby="onb-title">${tiles}</div>${custom}`;
   }
 
   function welcomeHTML() {
     return `<div class="onb-welcome"><span class="gyro-wrap lg" aria-hidden="true"><span class="gyro"><i></i><i></i><i></i><b></b></span></span>
       ${fresh ? `<p class="onb-done-pill"><svg class="ico" aria-hidden="true" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Account created</p>` : ''}
       <h1 id="onb-title">${fresh && currentUser ? `Welcome, ${esc(currentUser.name.split(' ')[0])}` : 'Find your tasks'}</h1>
-      <p class="sub">Five quick questions.</p></div>`;
+      <p class="sub">Four quick questions.</p></div>`;
   }
 
   async function resultsHTML(token) {
     picks = activities();
-    const prefs = { when: sel.when.id, blocker: sel.blocker.id };
+    const pf = prefs();
     await Promise.all(picks.map(async r => {
       const mins = r.h * 60 + r.m;
-      [r.help, r.where] = await Promise.all([ASSIST.load(r, mins, prefs), ASSIST.whereFor(r, mins, prefs)]);
+      [r.help, r.where] = await Promise.all([ASSIST.load(r, mins, pf), ASSIST.whereFor(r, mins, pf)]);
     }));
     if (token !== renderToken) return null;
     if (!chosen.size) picks.slice(0, 2).forEach((_, i) => chosen.add(i));      // start with the first two ticked
     const cards = picks.map((r, i) => `
-      <article class="reco pick${chosen.has(i) ? ' on' : ''}" style="--tint:${['#35e0ff', '#7fd3e6', '#9fb4c3', '#ffb020'][i % 4]};--i:${i}">
+      <article class="reco pick${chosen.has(i) ? ' on' : ''}" style="--i:${i}">
         <button type="button" class="pick-main" role="checkbox" aria-checked="${chosen.has(i)}" data-pick="${i}">
           <span class="reco-icon" aria-hidden="true">${r.icon}</span>
           <span class="pick-text"><b>${esc(r.name)}</b></span>
@@ -137,7 +140,7 @@ const ONBOARDING = (function () {
     const s = STEPS[step];
     if (s.id === 'welcome') return true;
     if (s.id === 'results') return chosen.size > 0 && totalStake() <= state.balance;
-    if (s.id === 'area') return sel.areas.length > 0;
+    if (MULTI[s.id]) return sel[MULTI[s.id].key].length > 0;
     return !!sel[s.id];
   }
 
@@ -162,24 +165,24 @@ const ONBOARDING = (function () {
   /* ---------- interaction ---------- */
   function choose(value) {
     const s = STEPS[step];
-    if (s.id === 'area') {
-      const has = sel.areas.includes(value);
-      if (value === 'unsure') sel.areas = has ? [] : ['unsure'];
+    const paint = on => $$('#onb-stage .tile').forEach(t => { const v = on(t.dataset.v); t.classList.toggle('on', v); t.setAttribute('aria-checked', v); });
+    if (MULTI[s.id]) {
+      const { key, exclusive } = MULTI[s.id];
+      const has = sel[key].includes(value);
+      if (exclusive && value === exclusive) sel[key] = has ? [] : [exclusive];
       else {
-        sel.areas = sel.areas.filter(a => a !== 'unsure');
-        if (has) sel.areas = sel.areas.filter(a => a !== value);
-        else if (sel.areas.length < MAX_AREAS) sel.areas.push(value);
-        else { toast(`Up to ${MAX_AREAS}`, 'info'); return; }
+        let next = sel[key].filter(v => v !== exclusive);              // picking something specific drops the "none of these" option
+        if (has) next = next.filter(v => v !== value);
+        else if (s.id === 'area' && next.length >= MAX_AREAS) { toast(`Up to ${MAX_AREAS}`, 'info'); return; }
+        else next.push(value);
+        sel[key] = next;
       }
-      $$('#onb-stage .tile').forEach(t => { const on = sel.areas.includes(t.dataset.v); t.classList.toggle('on', on); t.setAttribute('aria-checked', on); });
-    } else if (s.id === 'stake') {
+      paint(v => sel[key].includes(v));
+    } else {                                                           // stake: one answer
       sel.stake = GUIDE.STAKE.options.find(o => String(o.id) === value);
       sel.customStake = '';
       el('onb-custom-stake').value = '';
-      $$('#onb-stage .tile').forEach(t => { const on = t.dataset.v === value; t.classList.toggle('on', on); t.setAttribute('aria-checked', on); });
-    } else {
-      sel[s.id] = optionsFor(s.id).find(o => String(o.id) === value);
-      $$('#onb-stage .tile').forEach(t => { const on = t.dataset.v === value; t.classList.toggle('on', on); t.setAttribute('aria-checked', on); });
+      paint(v => v === value);
     }
     refreshFooter();
   }
@@ -206,7 +209,7 @@ const ONBOARDING = (function () {
       state.tasks.unshift({ id: uid(), name: r.name, icon: r.icon, status: 'active', createdAt: now, deadline: now + ms, durationMs: ms, penalty: r.stake });
     });
     state.defaultPenalty = sel.stake ? sel.stake.id : state.defaultPenalty;      // remember their comfortable stake
-    state.profile = { areas: sel.areas, blocker: sel.blocker && sel.blocker.id, when: sel.when && sel.when.id, time: sel.time && sel.time.id, stake: sel.stake && sel.stake.id };
+    state.profile = { areas: sel.areas, blockers: sel.blockers, whens: sel.whens, blocker: prefs().blocker, when: prefs().when, stake: sel.stake && sel.stake.id };
     saveState();
     finish();
     renderAll();
@@ -222,7 +225,7 @@ const ONBOARDING = (function () {
 
   function open(opts) {
     fresh = !!(opts && opts.registered);
-    step = 0; dir = 1; sel = { areas: [] }; picks = []; chosen = new Set();
+    step = 0; dir = 1; sel = { areas: [], blockers: [], whens: [] }; picks = []; chosen = new Set();
     el('overlay-onb').classList.remove('hidden');
     document.body.classList.add('no-scroll');
     render();
@@ -243,7 +246,7 @@ const ONBOARDING = (function () {
       const p = e.target.closest('[data-pick]');
       if (p) return togglePick(+p.dataset.pick);
       const h = e.target.closest('[data-pick-help]');
-      if (h) { const r = picks[+h.dataset.pickHelp]; openHelp({ name: r.name }, r.h * 60 + r.m, { when: sel.when.id, blocker: sel.blocker.id }); }
+      if (h) { const r = picks[+h.dataset.pickHelp]; openHelp({ name: r.name }, r.h * 60 + r.m, prefs()); }
     });
 
     // a typed stake overrides the tiles

@@ -165,21 +165,24 @@
         </dl>
       </div>
 
-      <section class="chart-card card" aria-labelledby="chart-title">
-        <h2 id="chart-title">Last 14 days</h2>
-        <div id="chart" class="chart" role="img" aria-label=""></div>
-      </section>
-
-      <div class="row-between list-head">
-        <h2 class="section-title">Results</h2>
-        <div class="seg sm" id="history-filter" role="radiogroup" aria-label="Filter results">
-          <button type="button" class="seg-btn on" role="radio" aria-checked="true" data-hf="all">All</button>
-          <button type="button" class="seg-btn" role="radio" aria-checked="false" data-hf="completed">Done</button>
-          <button type="button" class="seg-btn" role="radio" aria-checked="false" data-hf="failed">Missed</button>
+      <div class="history-grid">
+        <section class="chart-card card" aria-labelledby="chart-title">
+          <h2 id="chart-title">Last 14 days</h2>
+          <div id="chart" class="chart" role="img" aria-label=""></div>
+        </section>
+        <div class="history-results">
+          <div class="row-between list-head">
+            <h2 class="section-title">Results</h2>
+            <div class="seg sm" id="history-filter" role="radiogroup" aria-label="Filter results">
+              <button type="button" class="seg-btn on" role="radio" aria-checked="true" data-hf="all">All</button>
+              <button type="button" class="seg-btn" role="radio" aria-checked="false" data-hf="completed">Done</button>
+              <button type="button" class="seg-btn" role="radio" aria-checked="false" data-hf="failed">Missed</button>
+            </div>
+          </div>
+          <div id="tasks-history-list" class="plain-list"></div>
+          <button id="btn-history-more" class="btn ghost sm block hidden">Show more</button>
         </div>
       </div>
-      <div id="tasks-history-list" class="plain-list"></div>
-      <button id="btn-history-more" class="btn ghost sm block hidden">Show more</button>
     </section>
 
     <!-- ============ CHARITIES ============ -->
@@ -260,7 +263,7 @@
 <!-- ================= ADD TASK OVERLAY ================= -->
 <div id="overlay-add" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="add-title">
   <div class="sheet card">
-    <h3 id="add-title">New task</h3>
+    <div class="row-between"><h3 id="add-title">New task</h3><button type="button" class="icon-btn" id="btn-cancel-add" aria-label="Close">✕</button></div>
     <form id="add-task-form" class="gap-top">
       <label class="field"><span>Task</span><input id="at-name" type="text" placeholder="e.g. Go to the gym" maxlength="40"/></label>
       <div id="at-assist" class="assist-panel hidden" aria-live="polite"></div>
@@ -292,16 +295,19 @@
         </div>
         <div class="chip-row" id="date-presets">
           <button type="button" class="chip" data-days="0">Today</button>
+          <button type="button" class="chip" data-when="tonight">Tonight</button>
           <button type="button" class="chip active" data-days="1">Tomorrow</button>
           <button type="button" class="chip" data-days="3">In 3 days</button>
+          <button type="button" class="chip" data-when="friday">Friday</button>
+          <button type="button" class="chip" data-when="weekend">Weekend</button>
           <button type="button" class="chip" data-days="7">Next week</button>
+          <button type="button" class="chip" data-when="monthend">End of month</button>
         </div>
       </div>
       <p id="at-due-preview" class="due-preview" aria-live="polite"></p>
       <label class="field gap-top"><span>Stake ($)</span><input id="at-penalty" type="number" min="1" value="10"/></label>
       <p class="hint">Goes to charity if you miss it.</p>
       <div class="sheet-actions">
-        <button type="button" class="btn ghost" id="btn-cancel-add">Cancel</button>
         <button type="submit" class="btn primary">Start</button>
       </div>
     </form>
