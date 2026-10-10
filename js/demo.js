@@ -245,7 +245,7 @@
 
     // 1. a ticket from the Shop (skipped when they already have one)
     if (+st('state.tickets') < 1) {
-      say('You need a ticket first. Tickets are cheap and never expire, so it is smart to keep one.', '🛒');
+      say('You need a ticket first. Tickets are cheap and never expire, and you can buy more in the Shop any time.', '🛒');
       await tap('[data-view="shop"]');
       await waitFor(q('[data-buy="1"]'));
       await sleep(1500);
@@ -268,12 +268,12 @@
     await tap(`[data-bail="${id}"]`, true);              // Bail out
     await tap(`[data-bail="${id}"]`, true);              // Confirm, quickly: it times out
     await sleep(1500);
-    say('Done. You keep your stake, nothing goes to charity, and it does not count as a miss.', '✅');
-    await sleep(6000);
+    say('Done. You keep your stake, nothing goes to charity, and it does not count as a miss. Need more? You can buy more tickets in the Shop any time.', '✅');
+    await sleep(7500);                                    // a longer message to read
   }
 
   /* ---------- Scene 4: Not sure what to pick? ----------
-     Open "Get ideas", answer the AI assistant's four questions, look at the details of the first idea, and start it as a task. */
+     Open "Get ideas", answer the AI assistant's four questions, claim the first partner offer and start it as a task. */
   async function scene4() {
     const d = app();
     if (!q('#btn-open-guide')()) await tap('[data-view="home"]');
@@ -296,16 +296,13 @@
     // ideas that fit, partner offers first
     await waitFor(q('[data-guide-start]'), 20000);
     pace = .65;                                            // the ideas part moves along faster
-    say('Then it builds ideas that fit your answers, with offers from partners too.', '✨');
-    await sleep(3000);
-    if (q('[data-guide-help]')()) {
-      await tap('[data-guide-help]');                      // Details: places, prices and plans
-      await sleep(3500);
-      await tap('#btn-help-close');
-    }
-    say('Happy with one? Tap Start and the idea becomes a task, already filled in.', '👆');
-    await tap('[data-guide-start]');
+    say('Then it builds ideas that fit your answers, with offers from partners first.', '✨');
+    await sleep(2500);
+    say('Partner offers are limited, and picked just for you. Claim one before it is gone.', '🎁');
+    await sleep(1800);                                     // time to read it
+    await tap('[data-guide-claim]');                       // Claim offer on the first partner
     await waitFor(q('#add-task-form button[type="submit"]'));
+    say('Claiming it fills in your task. Show the code at the partner to get the deal.', '🏷️');
     await sleep(2500);
     await tap('#add-task-form button[type="submit"]');     // Start the task
     await sleep(2500);
@@ -339,15 +336,18 @@
   const lock = on => buttons.forEach(b => { b.disabled = on; b.style.opacity = on ? .4 : .7; });
 
   async function runScene(sc) {
+    const t0 = Date.now();
     showTitle(sc.title);
     app().documentElement.classList.add('demo-playing');   // hides the touch dot
     pace = sc.pace || 1;
     try { await sc.play(); } catch (e) { console.warn(e.message); }
     pace = 1;
+    console.debug(`demo: ${sc.label} played in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
     app().documentElement.classList.remove('demo-playing');
-    await sleep(2500);
+    await sleep(1200);                                     // short hold on the final state
     hideTitle(); hideSay();
-    await sleep(700);
+    await sleep(300);
+    return (Date.now() - t0) / 1000;
   }
 
   SCENES.forEach(sc => buttons.push(addButton(sc.label, async () => {
@@ -364,13 +364,27 @@
   });
   document.addEventListener('fullscreenchange', () => { full.textContent = document.fullscreenElement ? 'exit full screen' : 'full screen'; });
 
+  // Timer in the bottom-left corner: counts while "run all" plays, then stays as the report.
+  const clock = document.createElement('div');
+  clock.style.cssText = 'position:fixed;left:10px;bottom:10px;z-index:2147483647;padding:5px 11px;border-radius:12px;font:600 12px/1.4 system-ui,sans-serif;color:#fff;background:rgba(40,44,42,.85);border:1px solid rgba(255,255,255,.25);display:none;white-space:pre';
+  document.body.appendChild(clock);
+  const mmss = sec => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
+
   // Run all: go full screen, give the layout a moment to settle, then play every scene in order.
   const all = addButton('run all', async () => {
     if (running) return;
     running = true; lock(true);
-    if (!document.fullscreenElement) await document.documentElement.requestFullscreen().catch(e => console.warn(e.message));
-    await sleep(2500);
-    for (const sc of SCENES) { await runScene(sc); await sleep(1500); }
+    const start = Date.now();
+    clock.style.display = 'block';
+    const tickClock = setInterval(() => { clock.textContent = '⏱ ' + mmss((Date.now() - start) / 1000); }, 250);
+    if (!document.fullscreenElement) await Promise.race([document.documentElement.requestFullscreen().catch(e => console.warn(e.message)), sleep(3000)]);   // never wait on it for long
+    await sleep(1500);
+    const times = [];
+    for (const sc of SCENES) { times.push(await runScene(sc)); await sleep(300); }
+    clearInterval(tickClock);
+    const total = (Date.now() - start) / 1000;
+    clock.textContent = `⏱ Run all: ${mmss(total)} (${total.toFixed(1)}s)\n` + SCENES.map((sc, i) => `${sc.label} ${mmss(times[i])}`).join(' · ');
+    console.info(clock.textContent);
     running = false; lock(false);
   });
   buttons.push(all);
