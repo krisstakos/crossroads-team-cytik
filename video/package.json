@@ -1,0 +1,18 @@
+{
+  "name": "commit-video-tools",
+  "private": true,
+  "type": "module",
+  "description": "Regenerates the ad's phone screens and screen-recording from the real app.",
+  "scripts": {
+    "setup": "npm install && npx playwright install chromium",
+    "screens": "node tools/capture-screens.mjs",
+    "record": "node tools/record-flow.mjs",
+    "all": "npm run screens && npm run record && npm run films",
+    "films": "node tools/render-animatic.mjs all",
+    "mp4-flow": "ffmpeg -y -i clips/flow.webm -vf fps=30,scale=720:-2 -c:v libx264 -crf 20 -pix_fmt yuv420p -movflags +faststart films/app-flow.mp4",
+    "inserts": "node tools/build-inserts.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.0"
+  }
+}

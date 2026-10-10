@@ -3,3 +3,5 @@ instance/
 __pycache__/
 *.pyc
 .pytest_cache/
+video/node_modules/
+video/clips/
