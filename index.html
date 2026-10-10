@@ -3,13 +3,15 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-<meta name="theme-color" content="#0a0e13"/>
+<meta name="theme-color" content="#f6f7f6" media="(prefers-color-scheme: light)"/>
+<meta name="theme-color" content="#0b0e0c" media="(prefers-color-scheme: dark)"/>
+<script>/* apply the saved theme before first paint, so there is no flash */try{var t=localStorage.getItem("commit_theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 <title>Commit — Stay Accountable</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <!-- Non-blocking font load: falls back to system fonts if the CDN is slow/unreachable -->
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-<noscript><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet"></noscript>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
 <link rel="stylesheet" href="css/styles.css"/>
 </head>
 <body>
@@ -19,6 +21,8 @@
   <symbol id="i-today" viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5"/><path d="M12 13V9M9.5 3h5"/></symbol>
   <symbol id="i-history" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></symbol>
   <symbol id="i-charity" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z"/><circle cx="12" cy="10" r="2.4"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
   <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2"/><circle cx="9" cy="16" r="2"/></symbol>
 </svg>
 
@@ -26,23 +30,62 @@
 <div id="view-login" class="login-view">
   <div class="login-card" id="login-card">
     <h1 class="wordmark">Commit</h1>
-    <p class="tagline">Miss your goal and your money goes to charity.</p>
-    <form id="login-form" novalidate>
-      <label class="field">
-        <span>Username</span>
-        <input id="login-user" type="text" placeholder="e.g. alex" autocomplete="username" required/>
-      </label>
-      <label class="field">
-        <span>Password</span>
-        <div class="pass-wrap">
-          <input id="login-pass" type="password" placeholder="Password" autocomplete="current-password" required/>
-          <button type="button" id="btn-toggle-pass" class="show-btn" aria-label="Show password">Show</button>
-        </div>
-      </label>
-      <p id="login-error" class="form-error hidden"></p>
-      <button type="submit" class="btn primary block">Sign in</button>
-    </form>
-    <button id="demo-fill" class="link-btn">Use demo account (demo / demo123)</button>
+    <p class="tagline">Miss a goal, and your stake goes to charity.</p>
+
+    <div class="seg auth-tabs" role="radiogroup" aria-label="Account">
+      <button type="button" class="seg-btn on" role="radio" aria-checked="true" data-auth="signin">Sign in</button>
+      <button type="button" class="seg-btn" role="radio" aria-checked="false" data-auth="signup">Create account</button>
+    </div>
+
+    <div id="auth-signin">
+      <form id="login-form" novalidate>
+        <label class="field">
+          <span>Username</span>
+          <input id="login-user" type="text" autocomplete="username" autocapitalize="none" required/>
+        </label>
+        <label class="field">
+          <span>Password</span>
+          <div class="pass-wrap">
+            <input id="login-pass" type="password" autocomplete="current-password" required/>
+            <button type="button" id="btn-toggle-pass" class="show-btn" aria-label="Show password">Show</button>
+          </div>
+        </label>
+        <p id="login-error" class="form-error hidden" role="alert"></p>
+        <button type="button" id="login-to-signup" class="link-btn hidden">Create an account instead</button>
+        <button type="submit" class="btn primary block">Sign in</button>
+      </form>
+      <button id="demo-fill" class="link-btn">Try the demo</button>
+    </div>
+
+    <div id="auth-signup" class="hidden">
+      <form id="register-form" novalidate>
+        <label class="field">
+          <span>Name</span>
+          <input id="reg-name" type="text" autocomplete="name" maxlength="40" aria-describedby="err-reg-name"/>
+          <p class="field-error" id="err-reg-name" aria-live="polite"></p>
+        </label>
+        <label class="field">
+          <span>Username</span>
+          <input id="reg-user" type="text" autocomplete="username" autocapitalize="none" maxlength="24" aria-describedby="err-reg-user"/>
+          <p class="field-error" id="err-reg-user" aria-live="polite"></p>
+        </label>
+        <label class="field">
+          <span>Password</span>
+          <div class="pass-wrap">
+            <input id="reg-pass" type="password" autocomplete="new-password" aria-describedby="err-reg-pass"/>
+            <button type="button" id="btn-toggle-reg-pass" class="show-btn" aria-label="Show passwords">Show</button>
+          </div>
+          <div id="pw-meter" class="meter" data-level="0" aria-hidden="true"><i></i><i></i><i></i></div>
+          <p class="field-error" id="err-reg-pass" aria-live="polite"></p>
+        </label>
+        <label class="field">
+          <span>Repeat password</span>
+          <input id="reg-pass2" type="password" autocomplete="new-password" aria-describedby="err-reg-pass2"/>
+          <p class="field-error" id="err-reg-pass2" aria-live="polite"></p>
+        </label>
+        <button type="submit" class="btn primary block">Create account</button>
+      </form>
+    </div>
   </div>
 </div>
 
@@ -53,7 +96,7 @@
   <aside class="sidebar">
     <h2 class="wordmark side">Commit</h2>
     <nav class="side-nav" aria-label="Main">
-      <button class="nav-item active" data-view="home"><svg class="ico"><use href="#i-today"/></svg>Today</button>
+      <button class="nav-item active" data-view="home"><svg class="ico"><use href="#i-today"/></svg>Today<i class="nav-badge hidden" data-badge="active" aria-hidden="true"></i></button>
       <button class="nav-item" data-view="record"><svg class="ico"><use href="#i-history"/></svg>History</button>
       <button class="nav-item" data-view="charities"><svg class="ico"><use href="#i-charity"/></svg>Charity</button>
       <button class="nav-item" data-view="settings"><svg class="ico"><use href="#i-settings"/></svg>Settings</button>
@@ -61,7 +104,7 @@
     <div class="side-footer">
       <div class="user-chip">
         <div class="avatar" id="side-avatar">A</div>
-        <div><p id="side-username" class="u-name">alex</p><p class="u-sub">Mock account</p></div>
+        <p id="side-username" class="u-name">alex</p>
       </div>
       <button id="btn-logout" class="link-btn danger">Sign out</button>
     </div>
@@ -79,106 +122,102 @@
       <div class="page-head">
         <div>
           <h1>Today</h1>
-          <p class="sub" id="greet-date"></p>
+          <p class="sub hidden" id="greet-date"></p>
         </div>
         <button id="btn-add-task-desktop" class="btn primary desktop-only">New task</button>
       </div>
 
       <div id="tasks-active-list" class="timer-list"></div>
       <div id="no-tasks" class="empty hidden">
-        <p class="empty-title">Nothing on the clock</p>
-        <p class="sub">Name a task, set a deadline and put money on it. Prove it with a photo before time runs out, or the stake goes to your charity.</p>
-        <button id="btn-add-task-empty" class="btn primary">Start a task</button>
+        <p class="empty-title">No tasks yet</p>
+        <p class="sub">Start one and put a stake on it.</p>
+        <button id="btn-add-task-empty" class="btn primary">New task</button>
       </div>
 
-      <h2 class="section-title" id="reco-title">Recommended for you</h2>
+      <section class="guide-card" aria-labelledby="guide-card-title">
+        <span class="gyro-wrap" aria-hidden="true"><span class="gyro"><i></i><i></i><i></i><b></b></span></span>
+        <div>
+          <h2 id="guide-card-title">Not sure what to pick?</h2>
+        </div>
+        <button id="btn-open-guide" class="btn primary">Get ideas</button>
+      </section>
+
+      <h2 class="section-title" id="reco-title">Suggested</h2>
       <div id="recommended" class="reco-grid"></div>
     </section>
 
     <!-- ============ HISTORY ============ -->
     <section id="view-record" class="view hidden">
-      <div class="page-head">
-        <div>
-          <h1>History</h1>
-          <p class="sub">Your balance, results and recent activity.</p>
-        </div>
-      </div>
+      <div class="page-head"><h1>History</h1></div>
 
       <div class="record-top">
         <div class="ledger">
           <div>
             <p class="sub">Balance</p>
             <p class="ledger-balance" id="hero-balance">$0.00</p>
-            <p class="sub">Linked account ending 4821 (mock)</p>
           </div>
           <button id="btn-add-funds-hero" class="btn ghost">Add funds</button>
         </div>
         <dl class="figures">
-          <div><dt>Completed</dt><dd id="stat-completed">0</dd></div>
+          <div><dt>Done</dt><dd id="stat-completed">0</dd></div>
           <div><dt>Missed</dt><dd id="stat-missed">0</dd></div>
-          <div><dt>Sent to charity</dt><dd id="stat-sent">$0</dd></div>
+          <div><dt>To charity</dt><dd id="stat-sent">$0</dd></div>
         </dl>
       </div>
 
-      <div class="record-cols">
-        <div>
-          <h2 class="section-title">Results</h2>
-          <div id="tasks-history-list" class="plain-list"></div>
-        </div>
-        <div>
-          <h2 class="section-title">Activity</h2>
-          <div id="activity-list" class="plain-list"></div>
+      <section class="chart-card card" aria-labelledby="chart-title">
+        <h2 id="chart-title">Last 14 days</h2>
+        <div id="chart" class="chart" role="img" aria-label=""></div>
+      </section>
+
+      <div class="row-between list-head">
+        <h2 class="section-title">Results</h2>
+        <div class="seg sm" id="history-filter" role="radiogroup" aria-label="Filter results">
+          <button type="button" class="seg-btn on" role="radio" aria-checked="true" data-hf="all">All</button>
+          <button type="button" class="seg-btn" role="radio" aria-checked="false" data-hf="completed">Done</button>
+          <button type="button" class="seg-btn" role="radio" aria-checked="false" data-hf="failed">Missed</button>
         </div>
       </div>
+      <div id="tasks-history-list" class="plain-list"></div>
+      <button id="btn-history-more" class="btn ghost sm block hidden">Show more</button>
     </section>
 
     <!-- ============ CHARITIES ============ -->
     <section id="view-charities" class="view hidden">
-      <div class="page-head">
-        <div>
-          <h1>Your charity</h1>
-          <p class="sub">When you miss a task, your stake is sent here. Pick who benefits.</p>
-        </div>
-      </div>
+      <div class="page-head"><h1>Charity</h1></div>
+      <div id="charity-feature"></div>
+      <h2 class="section-title">Others</h2>
       <div id="charities-list" class="charity-grid"></div>
+      <p class="hint charity-note">Sample charities. No real money moves.</p>
     </section>
 
     <!-- ============ SETTINGS ============ -->
     <section id="view-settings" class="view hidden">
-      <div class="page-head">
-        <div><h1>Settings</h1><p class="sub">Account, payments and preferences.</p></div>
-      </div>
+      <div class="page-head"><h1>Settings</h1></div>
 
       <div class="settings-stack">
         <div class="card settings-card">
-          <h3>Profile</h3>
-          <div class="row-between gap-top">
+          <div class="row-between">
             <div class="user-chip">
               <div class="avatar" id="set-avatar">A</div>
-              <div><p id="settings-username" class="u-name">alex</p><p class="u-sub">Mock account, no backend</p></div>
+              <p id="settings-username" class="u-name">alex</p>
             </div>
             <button id="btn-logout2" class="btn ghost sm danger-text">Sign out</button>
           </div>
         </div>
 
         <div class="card settings-card">
-          <h3>Payment account</h3>
-          <p class="sub">Balance <strong id="set-balance">$0.00</strong>. Total sent to charity <strong id="set-sent">$0</strong>.</p>
-          <p class="label gap-top">Add funds (mock)</p>
-          <div class="chip-row" id="funds-chips">
+          <h3>Add funds</h3>
+          <p class="sub">Balance <strong id="set-balance">$0.00</strong></p>
+          <div class="chip-row gap-top" id="funds-chips">
             <button class="chip" data-amount="25">+$25</button>
             <button class="chip" data-amount="50">+$50</button>
             <button class="chip" data-amount="100">+$100</button>
-          </div>
-          <div class="inline-form">
-            <input id="custom-funds" type="number" min="1" placeholder="Custom amount" aria-label="Custom amount"/>
-            <button id="btn-add-custom" class="btn primary sm">Add</button>
           </div>
         </div>
 
         <div class="card settings-card">
           <h3>Default stake</h3>
-          <p class="sub">Pre-filled when you create a new task.</p>
           <div class="inline-form">
             <span class="dollar-sign">$</span>
             <input id="default-penalty" type="number" min="1" value="10" aria-label="Default stake"/>
@@ -186,9 +225,22 @@
           </div>
         </div>
 
+        <div class="card settings-card">
+          <h3>Appearance</h3>
+          <div class="seg three gap-top" id="theme-choice" role="radiogroup" aria-label="Theme">
+            <button type="button" class="seg-btn on" role="radio" aria-checked="true" data-theme-choice="auto">Auto</button>
+            <button type="button" class="seg-btn" role="radio" aria-checked="false" data-theme-choice="light">Light</button>
+            <button type="button" class="seg-btn" role="radio" aria-checked="false" data-theme-choice="dark">Dark</button>
+          </div>
+        </div>
+
+        <div class="card settings-card">
+          <h3>Suggestions</h3>
+          <button id="btn-redo-onboarding" class="btn ghost sm gap-top">Redo setup</button>
+        </div>
+
         <div class="card settings-card danger-zone">
-          <h3>Danger zone</h3>
-          <p class="sub">Reset all demo data: tasks, balance and history.</p>
+          <h3>Reset</h3>
           <button id="btn-reset" class="btn ghost sm danger-text gap-top">Reset demo data</button>
         </div>
       </div>
@@ -196,10 +248,10 @@
 
   <!-- Mobile bottom nav -->
   <nav class="bottom-nav" aria-label="Main">
-    <button class="bn-item active" data-view="home"><svg class="ico"><use href="#i-today"/></svg><small>Today</small></button>
-    <button class="bn-item" data-view="record"><svg class="ico"><use href="#i-history"/></svg><small>History</small></button>
-    <button class="bn-item" data-view="charities"><svg class="ico"><use href="#i-charity"/></svg><small>Charity</small></button>
-    <button class="bn-item" data-view="settings"><svg class="ico"><use href="#i-settings"/></svg><small>Settings</small></button>
+    <button class="bn-item active" data-view="home"><span class="bn-ico"><svg class="ico" aria-hidden="true"><use href="#i-today"/></svg><i class="bn-badge hidden" data-badge="active" aria-hidden="true"></i></span><small>Today</small></button>
+    <button class="bn-item" data-view="record"><span class="bn-ico"><svg class="ico" aria-hidden="true"><use href="#i-history"/></svg></span><small>History</small></button>
+    <button class="bn-item" data-view="charities"><span class="bn-ico"><svg class="ico" aria-hidden="true"><use href="#i-charity"/></svg></span><small>Charity</small></button>
+    <button class="bn-item" data-view="settings"><span class="bn-ico"><svg class="ico" aria-hidden="true"><use href="#i-settings"/></svg></span><small>Settings</small></button>
   </nav>
   <button id="fab-add" class="fab" aria-label="New task">New task</button>
   </main>
@@ -209,26 +261,48 @@
 <div id="overlay-add" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="add-title">
   <div class="sheet card">
     <h3 id="add-title">New task</h3>
-    <p class="sub sheet-sub">Set a deadline and put money on the line.</p>
-    <form id="add-task-form">
-      <label class="field"><span>Task name</span><input id="at-name" type="text" placeholder="e.g. Go to the gym" maxlength="40"/></label>
-      <div class="field"><span>Icon</span><div id="at-icon-picker" class="icon-row"></div></div>
-      <div class="field two-col">
-        <div><span>Hours</span><input id="at-hours" type="number" min="0" max="72" value="1"/></div>
-        <div><span>Minutes</span><input id="at-minutes" type="number" min="0" max="59" value="0"/></div>
+    <form id="add-task-form" class="gap-top">
+      <label class="field"><span>Task</span><input id="at-name" type="text" placeholder="e.g. Go to the gym" maxlength="40"/></label>
+      <div id="at-assist" class="assist-panel hidden" aria-live="polite"></div>
+      <div class="field">
+        <span id="at-mode-label">Deadline</span>
+        <div class="seg" role="radiogroup" aria-labelledby="at-mode-label">
+          <button type="button" class="seg-btn on" role="radio" aria-checked="true" data-mode="duration">Time limit</button>
+          <button type="button" class="seg-btn" role="radio" aria-checked="false" data-mode="date">Due date</button>
+        </div>
       </div>
-      <div class="chip-row" id="duration-presets">
-        <button type="button" class="chip" data-h="0" data-m="30">30m</button>
-        <button type="button" class="chip active" data-h="1" data-m="0">1h</button>
-        <button type="button" class="chip" data-h="2" data-m="0">2h</button>
-        <button type="button" class="chip" data-h="4" data-m="0">4h</button>
-        <button type="button" class="chip" data-h="8" data-m="0">8h</button>
+      <div id="at-mode-duration">
+        <div class="chip-row" id="duration-presets">
+          <button type="button" class="chip" data-h="0" data-m="30">30m</button>
+          <button type="button" class="chip active" data-h="1" data-m="0">1h</button>
+          <button type="button" class="chip" data-h="2" data-m="0">2h</button>
+          <button type="button" class="chip" data-h="4" data-m="0">4h</button>
+          <button type="button" class="chip" data-h="8" data-m="0">8h</button>
+          <button type="button" class="chip" data-custom="1">Custom</button>
+        </div>
+        <div id="at-custom" class="field two-col gap-top hidden">
+          <div><span>Hours</span><input id="at-hours" type="number" min="0" max="72" value="1"/></div>
+          <div><span>Minutes</span><input id="at-minutes" type="number" min="0" max="59" value="0"/></div>
+        </div>
       </div>
-      <label class="field gap-top"><span>Your stake ($)</span><input id="at-penalty" type="number" min="1" value="10"/></label>
-      <p class="hint">If the timer hits zero, this amount is sent to your charity.</p>
+      <div id="at-mode-date" class="hidden">
+        <div class="field two-col">
+          <div><span>Date</span><input id="at-date" type="date"/></div>
+          <div><span>Time</span><input id="at-time" type="time" value="18:00"/></div>
+        </div>
+        <div class="chip-row" id="date-presets">
+          <button type="button" class="chip" data-days="0">Today</button>
+          <button type="button" class="chip active" data-days="1">Tomorrow</button>
+          <button type="button" class="chip" data-days="3">In 3 days</button>
+          <button type="button" class="chip" data-days="7">Next week</button>
+        </div>
+      </div>
+      <p id="at-due-preview" class="due-preview" aria-live="polite"></p>
+      <label class="field gap-top"><span>Stake ($)</span><input id="at-penalty" type="number" min="1" value="10"/></label>
+      <p class="hint">Goes to charity if you miss it.</p>
       <div class="sheet-actions">
         <button type="button" class="btn ghost" id="btn-cancel-add">Cancel</button>
-        <button type="submit" class="btn primary">Start timer</button>
+        <button type="submit" class="btn primary">Start</button>
       </div>
     </form>
   </div>
@@ -244,7 +318,7 @@
       <span id="pf-task-name" class="pf-title"></span>
     </div>
     <div id="pf-camera-error" class="pf-error hidden">
-      <p>Camera unavailable.<br/>Use a photo from your library instead.</p>
+      <p>No camera found.</p>
       <label class="btn primary sm">Choose photo<input id="pf-file-fallback" type="file" accept="image/*" hidden/></label>
     </div>
     <div class="pf-bottom">
@@ -256,11 +330,11 @@
   <div id="pf-analysis" class="pf-stage hidden">
     <div class="pf-img-wrap"><img id="pf-image" alt="Captured proof"/><div class="scanline"></div></div>
     <div class="card pf-steps">
-      <p class="ai-head"><span class="ai-dot"></span> AI verification</p>
+      <p class="ai-head"><span class="ai-dot"></span> Verifying</p>
       <ul id="pf-step-list">
-        <li data-step="0">Detecting scene &amp; objects…</li>
-        <li data-step="1">Matching against task context…</li>
-        <li data-step="2">Checking for edits or manipulation…</li>
+        <li data-step="0">Scanning photo</li>
+        <li data-step="1">Matching task</li>
+        <li data-step="2">Checking for edits</li>
       </ul>
     </div>
     <div id="pf-result" class="card pf-result hidden">
@@ -269,11 +343,49 @@
       <p id="pf-verdict-sub" class="sub"></p>
       <div class="conf-row"><span>Confidence</span><b id="pf-conf-text">0%</b></div>
       <div class="conf-bar"><div id="pf-conf-fill"></div></div>
-      <div id="pf-detected" class="chip-row wrap center-chips"></div>
     </div>
     <div class="pf-actions">
       <button id="btn-pf-retake" class="btn ghost hidden">Retake photo</button>
-      <button id="btn-pf-done" class="btn primary block hidden">Confirm and complete</button>
+      <button id="btn-pf-done" class="btn primary block hidden">Complete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= ONBOARDING (one question per screen, ends on suggested activities) ================= -->
+<div id="overlay-onb" class="onb-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="onb-title">
+  <div class="onb-panel" tabindex="-1">
+    <header class="onb-top">
+      <button id="onb-back" class="icon-btn invisible" aria-label="Back"><svg class="ico" aria-hidden="true"><use href="#i-back"/></svg></button>
+      <div id="onb-dots" class="onb-dots" aria-hidden="true"></div>
+      <button id="onb-skip" class="link-btn">Skip</button>
+    </header>
+    <div id="onb-stage" class="onb-stage"></div>
+    <footer class="onb-foot">
+      <p id="onb-note" class="hint" aria-live="polite"></p>
+      <button id="onb-next" class="btn primary block">Get started</button>
+    </footer>
+  </div>
+</div>
+
+<!-- ================= TASK GUIDE (scripted conversation) ================= -->
+<div id="overlay-guide" class="guide-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="guide-title">
+  <div class="guide-panel" tabindex="-1">
+    <header class="guide-head">
+      <button id="btn-guide-close" class="icon-btn" aria-label="Close guide">✕</button>
+      <div class="guide-head-text">
+        <h2 id="guide-title">Task guide</h2>
+        <p class="sub" id="guide-progress">Getting started</p>
+      </div>
+      <button id="btn-guide-restart" class="link-btn">Start over</button>
+    </header>
+    <div class="guide-bar" aria-hidden="true"><div id="guide-bar-fill"></div></div>
+    <div id="guide-log" class="guide-log" aria-live="polite"></div>
+    <div class="guide-input">
+      <div id="guide-chips" class="chip-row"></div>
+      <form id="guide-form" class="guide-form" autocomplete="off">
+        <input id="guide-text" type="text" placeholder="Type an answer" aria-label="Your answer" disabled/>
+        <button id="guide-send" class="btn primary" type="submit" disabled>Send</button>
+      </form>
     </div>
   </div>
 </div>
@@ -285,43 +397,49 @@
       <svg viewBox="0 0 120 120"><circle class="arc" cx="60" cy="60" r="54" pathLength="100"/></svg>
       <svg viewBox="0 0 120 120"><path class="tick" d="M38 62 L54 78 L84 44" pathLength="100"/></svg>
     </div>
-    <h2 id="done-title" class="done-title">Task complete</h2>
-    <p id="done-sub" class="done-sub"></p>
+    <h2 id="done-title" class="done-title">Done</h2>
     <p id="done-stake" class="done-stake"></p>
     <button id="btn-done-close" class="btn primary">Continue</button>
+  </div>
+</div>
+
+<!-- ================= TASK HELP (nearby places, prices, plans) ================= -->
+<div id="overlay-help" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="help-title">
+  <div class="sheet card help-sheet">
+    <button id="btn-help-close" class="icon-btn help-close" aria-label="Close help">✕</button>
+    <div id="help-body"></div>
   </div>
 </div>
 
 <!-- ================= PHONE PROMPT (desktop: complete on phone) ================= -->
 <div id="overlay-phone" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="phone-title">
   <div class="sheet card phone-sheet">
-    <h3 id="phone-title">Complete this on your phone</h3>
-    <p class="sub">Tasks can only be completed with camera proof. Open Commit on your phone and tap "Complete with photo". The timer keeps running.</p>
-    <button id="btn-phone-ok" class="btn primary block">Got it</button>
+    <h3 id="phone-title">Finish on your phone</h3>
+    <p class="sub">Open Commit on your phone to complete this with a photo.</p>
+    <button id="btn-phone-ok" class="btn primary block">OK</button>
   </div>
 </div>
 
 <!-- ================= AI REPORT MODAL ================= -->
 <div id="overlay-report" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="report-title">
   <div class="sheet card report-sheet">
-    <div class="row-between"><h3 id="report-title">AI verification report</h3><button id="btn-close-report" class="icon-btn" aria-label="Close">✕</button></div>
+    <div class="row-between"><h3 id="report-title">Verification</h3><button id="btn-close-report" class="icon-btn" aria-label="Close">✕</button></div>
     <img id="report-image" alt="Proof of completion"/>
     <p class="report-task" id="report-task-name"></p>
     <div class="report-grid">
       <div><span>Verdict</span><b id="report-verdict"></b></div>
       <div><span>Confidence</span><b id="report-confidence"></b></div>
-      <div><span>Captured at</span><b id="report-time"></b></div>
-      <div><span>Model</span><b>ProofNet v2 (mock)</b></div>
+      <div class="wide"><span>Captured</span><b id="report-time"></b></div>
     </div>
-    <p class="label gap-top">Detected elements</p>
-    <div id="report-detected" class="chip-row wrap"></div>
-    <p class="hint" id="report-note"></p>
   </div>
 </div>
 
 <div id="toast-container" role="status" aria-live="polite"></div>
 
 <script src="js/mock-data.js"></script>
+<script src="js/assist.js"></script>
 <script src="js/app.js"></script>
+<script src="js/guide.js"></script>
+<script src="js/onboarding.js"></script>
 </body>
 </html>

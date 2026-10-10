@@ -7,17 +7,36 @@ const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const sleep = ms => new Promise(res => setTimeout(res, ms));
 const pad = n => String(n).padStart(2, '0');
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const fmtMoney = n => '$' + (Number.isInteger(n) ? n : n.toFixed(2));
+const fmtMoney = n => '$' + (Number.isInteger(n) ? n.toLocaleString('en-US') : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
 
 function fmtCountdown(ms) {
   if (ms <= 0) return '00:00';
   const s = Math.floor(ms / 1000);
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  if (d > 0) return `${d}d ${h}h`;                       // more than a day away: minutes and seconds are noise
   return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
 }
 function fmtClock(ts) {
   return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+// A deadline in plain words: "6:40 PM", "Tomorrow, 6:40 PM", "Fri 6:40 PM", "Oct 14, 6:40 PM".
+function fmtDeadline(ts, now = Date.now()) {
+  const day = t => { const x = new Date(t); x.setHours(0, 0, 0, 0); return x.getTime(); };
+  const diff = Math.round((day(ts) - day(now)) / 86400000);
+  const time = fmtClock(ts);
+  if (diff <= 0) return time;
+  if (diff === 1) return `Tomorrow, ${time}`;
+  if (diff < 7) return `${new Date(ts).toLocaleDateString([], { weekday: 'short' })} ${time}`;
+  return `${new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`;
+}
+// "3 days 4 hours", "2 h 15 min", "40 min"
+function humanSpan(ms) {
+  const mins = Math.max(0, Math.round(ms / 60000));
+  const d = Math.floor(mins / 1440), h = Math.floor((mins % 1440) / 60), m = mins % 60;
+  if (d) return `${d} day${d > 1 ? 's' : ''}${h ? ` ${h} hour${h > 1 ? 's' : ''}` : ''}`;
+  if (h) return `${h} h${m ? ` ${m} min` : ''}`;
+  return `${m} min`;
 }
 function timeAgo(ts) {
   const d = Date.now() - ts, m = Math.floor(d / 60000);
@@ -32,7 +51,7 @@ function timeAgo(ts) {
 const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // Countdown text as per-character spans so a changed digit can roll in on its own.
-const digitsHTML = text => Array.from(text).map((c, i) => `<span class="dg in" style="--d:${i * 70}ms">${c}</span>`).join('');
+const digitsHTML = text => Array.from(text).map((c, i) => `<span class="dg in" style="--d:${i * 18}ms">${c}</span>`).join('');
 function setCountdown(el, text) {
   const cur = el.children;
   if (cur.length !== text.length) { el.innerHTML = digitsHTML(text).replace(/ in"/g, ' in t"'); return; }
@@ -46,7 +65,7 @@ function setCountdown(el, text) {
 }
 
 // Count a figure up from zero when its screen opens.
-function countUp(el, to, fmt = String, ms = 900) {
+function countUp(el, to, fmt = String, ms = 450) {
   if (reduceMotion()) { el.textContent = fmt(to); return; }
   const t0 = performance.now();
   const step = now => {
@@ -59,25 +78,11 @@ function countUp(el, to, fmt = String, ms = 900) {
 const roundMoney = n => fmtMoney(Math.round(n * 100) / 100);
 
 function playRecordCounters() {
-  countUp($('#hero-balance'), state.balance, roundMoney, 1000);
-  countUp($('#stat-completed'), state.tasks.filter(t => t.status === 'completed').length, n => Math.round(n));
-  countUp($('#stat-missed'), state.tasks.filter(t => t.status === 'failed').length, n => Math.round(n));
+  const st = historyStats();
+  countUp($('#hero-balance'), state.balance, roundMoney, 500);
+  countUp($('#stat-completed'), st.done, n => Math.round(n));
+  countUp($('#stat-missed'), st.missed, n => Math.round(n));
   countUp($('#stat-sent'), state.totalSent, roundMoney);
-}
-
-function burst() {
-  if (reduceMotion()) return;
-  const root = document.createElement('div');
-  root.className = 'burst';
-  const colors = ['#1ef0a6', '#4cb2ff', '#ffc233', '#a78bff', '#ffffff'];
-  for (let i = 0; i < 44; i++) {
-    const a = Math.random() * Math.PI * 2, d = 120 + Math.random() * 260;
-    const p = document.createElement('i');
-    p.style.cssText = `--c:${colors[i % colors.length]};--x:${Math.cos(a) * d}px;--y:${Math.sin(a) * d + 80}px;--r:${Math.random() * 720 - 360}deg;--t:${0.9 + Math.random() * 0.7}s`;
-    root.appendChild(p);
-  }
-  document.body.appendChild(root);
-  setTimeout(() => root.remove(), 1800);
 }
 
 function flash() {
@@ -89,16 +94,31 @@ function flash() {
 }
 
 /* ---------- state ---------- */
-const LS_STATE = 'commit_state_v1', LS_USER = 'commit_user_v1', LS_SESSION = 'commit_session_v1';
+const LS_STATE = 'commit_state_v1', LS_USER = 'commit_user_v1', LS_USERS = 'commit_users_v1', LS_SESSION = 'commit_session_v1', LS_ONBOARDED = 'commit_onboarded_v1';
 let state = null;
 let currentUser = null;
 
-function loadState() { try { const raw = localStorage.getItem(LS_STATE); if (raw) return JSON.parse(raw); } catch (e) {} return null; }
+// Every account keeps its own data under its own key, so several people can use one browser.
+const keyFor = (base, u = currentUser && currentUser.username) => `${base}:${u}`;
+function loadState(u) { try { const raw = localStorage.getItem(keyFor(LS_STATE, u)); if (raw) return JSON.parse(raw); } catch (e) {} return null; }
 function saveState() {
-  try { localStorage.setItem(LS_STATE, JSON.stringify(state)); }
-  catch (e) { toast('Storage is full — the latest proof image may not persist', 'error'); }
+  if (!currentUser) return;
+  try { localStorage.setItem(keyFor(LS_STATE), JSON.stringify(state)); }
+  catch (e) { toast('Storage is full', 'error'); }
 }
-const initState = () => { state = loadState() || MOCK.seedState(); if (!loadState()) saveState(); };
+// The demo account keeps its sample tasks; every other account starts clean.
+const newStateFor = u => (u === 'demo' ? MOCK.seedState() : MOCK.freshState());
+// Saves from older versions lack the newer charity fields and charities. Fill them in without touching the user's numbers.
+function normalizeState(st) {
+  MOCK.charities().forEach(base => {
+    const c = st.charities.find(x => x.id === base.id);
+    if (!c) st.charities.push(base);
+    else ['category', 'goal', 'impact'].forEach(k => { if (c[k] === undefined) c[k] = base[k]; });
+  });
+  st.tasks.forEach(t => { if (t.status === 'failed' && !t.charityId) t.charityId = st.selectedCharityId; });
+  return st;
+}
+function initState(u) { state = normalizeState(loadState(u) || newStateFor(u)); saveState(); }
 const taskById = id => state.tasks.find(t => t.id === id);
 const selectedCharity = () => state.charities.find(c => c.id === state.selectedCharityId) || state.charities[0];
 
@@ -106,6 +126,20 @@ function isMobile() {
   return /Mobi|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && window.innerWidth < 900);
 }
 const hasCamera = () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+
+/* ---------- theme: auto (follows the device), light or dark ---------- */
+const LS_THEME = 'commit_theme';
+const THEME_COLOR = { light: '#f6f7f6', dark: '#0b0e0c' };
+function themeChoice() { const t = localStorage.getItem(LS_THEME); return t === 'light' || t === 'dark' ? t : 'auto'; }
+function applyTheme(choice) {
+  const root = document.documentElement;
+  if (choice === 'auto') { root.removeAttribute('data-theme'); localStorage.removeItem(LS_THEME); }
+  else { root.setAttribute('data-theme', choice); localStorage.setItem(LS_THEME, choice); }
+  // browser chrome colour follows the chosen theme (or the device, in auto)
+  const mode = choice === 'auto' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : choice;
+  $$('meta[name="theme-color"]').forEach(m => m.setAttribute('content', THEME_COLOR[mode]));
+  $$('#theme-choice .seg-btn').forEach(b => { const on = b.dataset.themeChoice === choice; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+}
 
 /* ---------- toasts ---------- */
 function toast(msg, type = 'info') {
@@ -118,19 +152,93 @@ function toast(msg, type = 'info') {
 }
 
 /* ---------- auth (mock) ---------- */
-function storedUser() { try { return JSON.parse(localStorage.getItem(LS_USER)); } catch (e) { return null; } }
+const DEMO_USERS = { demo: { password: 'demo123', name: 'Demo' } };
+function getUsers() {
+  let stored = {};
+  try { stored = JSON.parse(localStorage.getItem(LS_USERS)) || {}; } catch (e) {}
+  return { ...stored, ...DEMO_USERS };
+}
 
-async function handleLogin(u, p) {
-  const user = storedUser();
-  if (!user) {
-    localStorage.setItem(LS_USER, JSON.stringify({ username: u, password: p }));
-    currentUser = { username: u };
-  } else if (user.username === u && user.password === p) {
-    currentUser = { username: u };
-  } else return false;
+// Older versions kept one account in one place. Move it across so nobody loses their data.
+function migrateLegacy() {
+  let legacy = null;
+  try { legacy = JSON.parse(localStorage.getItem(LS_USER)); } catch (e) {}
+  if (!legacy || !legacy.username) return;
+  const u = String(legacy.username).trim().toLowerCase();
+  const users = getUsers();
+  if (!users[u]) {
+    const stored = JSON.parse(localStorage.getItem(LS_USERS) || '{}');
+    stored[u] = { password: legacy.password, name: String(legacy.username).trim() };
+    localStorage.setItem(LS_USERS, JSON.stringify(stored));
+  }
+  const oldState = localStorage.getItem(LS_STATE);
+  if (oldState && !localStorage.getItem(keyFor(LS_STATE, u))) localStorage.setItem(keyFor(LS_STATE, u), oldState);
+  localStorage.setItem(keyFor(LS_ONBOARDED, u), '1');           // existing users skip the setup
+  if (localStorage.getItem(LS_SESSION)) localStorage.setItem(LS_SESSION, u);
+  localStorage.removeItem(LS_USER);
+  localStorage.removeItem(LS_STATE);
+}
+
+const cap = str => str.charAt(0).toUpperCase() + str.slice(1);
+const USERNAME_RE = /^[a-z0-9._-]{2,20}$/;
+
+// Starts a session for an existing account. `registered` means they just created it, so setup follows straight away.
+function startSession(u, opts = {}) {
+  const user = getUsers()[u] || {};
+  currentUser = { username: u, name: user.name || cap(u) };
   localStorage.setItem(LS_SESSION, u);
-  enterApp();
-  return true;
+  initState(u);
+  if (u === 'demo') localStorage.setItem(keyFor(LS_ONBOARDED), '1');     // the demo account skips setup
+  enterApp(opts);
+}
+
+// Sign in only. A username that does not exist is an error, with an offer to create it.
+async function handleLogin(rawName, password) {
+  const u = rawName.trim().toLowerCase();
+  const user = getUsers()[u];
+  if (!user) return { message: 'No account with that username', signup: true };
+  if (user.password !== password) return { message: 'Wrong password' };
+  startSession(u);
+  return null;
+}
+
+/* ---------- registration ---------- */
+// 0 too short, 1 weak, 2 okay, 3 strong
+function passwordStrength(pw) {
+  if (pw.length < 6) return 0;
+  const classes = [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z0-9]/].filter(r => r.test(pw)).length;
+  if (pw.length >= 12 || (pw.length >= 10 && classes >= 3)) return 3;
+  if (pw.length >= 8 && classes >= 2) return 2;
+  return 1;
+}
+
+// Returns { name?, username?, password?, confirm? } with a message for each problem; empty means valid.
+function validateRegistration(v) {
+  const e = {};
+  const name = (v.name || '').trim(), u = (v.username || '').trim().toLowerCase();
+  if (!name) e.name = 'Enter your name';
+  else if (name.length > 30) e.name = '30 characters or fewer';
+  if (!u) e.username = 'Choose a username';
+  else if (!USERNAME_RE.test(u)) e.username = '2 to 20 letters or numbers';
+  else if (getUsers()[u]) e.username = 'Username taken';
+  if ((v.password || '').length < 6) e.password = 'At least 6 characters';
+  else if (v.password.toLowerCase() === u) e.password = 'Cannot match your username';
+  if (!v.confirm) e.confirm = 'Repeat your password';
+  else if (v.confirm !== v.password) e.confirm = 'Does not match';
+  return e;
+}
+
+// Creates the account and signs in. Returns null on success, or the validation errors.
+function registerAccount(v) {
+  const errors = validateRegistration(v);
+  if (Object.keys(errors).length) return errors;
+  const u = v.username.trim().toLowerCase();
+  const stored = JSON.parse(localStorage.getItem(LS_USERS) || '{}');
+  stored[u] = { password: v.password, name: v.name.trim(), createdAt: Date.now() };
+  localStorage.setItem(LS_USERS, JSON.stringify(stored));
+  startSession(u, { registered: true });
+  toast('Account created', 'success');
+  return null;
 }
 
 function logout() {
@@ -152,15 +260,20 @@ function showView(name) {
   if (name === 'record' && state) playRecordCounters();
 }
 
-function enterApp() {
-  const name = currentUser.username;
+function enterApp(opts = {}) {
+  const name = currentUser.name;
   $('#view-login').classList.add('hidden');
   $('#app-shell').classList.remove('hidden');
-  const cap = name.charAt(0).toUpperCase() + name.slice(1);
-  $('#side-username').textContent = cap;
-  $('#set-avatar').textContent = name.charAt(0) || 'A';
+  $('#side-username').textContent = name;
+  $('#side-avatar').textContent = name.charAt(0).toUpperCase() || 'A';
+  $('#set-avatar').textContent = name.charAt(0).toUpperCase() || 'A';
   renderAll();
   showView('home');
+  // accounts that have not done the setup get the questions; a brand new account gets them immediately
+  if (!localStorage.getItem(keyFor(LS_ONBOARDED))) {
+    if (opts.registered) ONBOARDING.open({ registered: true });
+    else setTimeout(() => ONBOARDING.open(), 400);
+  }
 }
 
 function renderAll() { renderHome(); renderRecord(); renderCharities(); renderSettings(); updateTopbarBalance(); }
@@ -171,18 +284,20 @@ function taskCardHTML(t, lead) {
   const remaining = t.deadline - Date.now();
   const pct = Math.max(0, Math.min(100, (remaining / t.durationMs) * 100));
   const text = fmtCountdown(remaining);
-  const btn = `<button class="btn primary complete-btn" data-complete="${t.id}">${isMobile() ? 'Complete with photo' : 'Complete'}</button>`;
+  const complete = `<button class="btn primary complete-btn" data-complete="${t.id}">Complete</button>`;
+  const help = ASSIST.kindOf(t) ? `<button class="btn ghost help-btn" data-help="${t.id}">Help</button>` : '';
+  const btn = `<div class="card-actions">${complete}${help}</div>`;
   const del = `<button class="icon-btn delete-btn" data-delete="${t.id}" aria-label="Delete ${esc(t.name)}">✕</button>`;
   const countdown = `<span class="countdown" data-countdown="${t.id}" aria-label="${text} remaining">${digitsHTML(text)}</span>`;
 
   if (!lead) {
     return `<article class="task-card" data-task-id="${t.id}">
       <div class="task-head">
-        <div class="task-title"><h3>${esc(t.name)}</h3><span class="chip stake">${fmtMoney(t.penalty)} on the line</span></div>
+        <div class="task-title"><h3>${esc(t.name)}</h3><span class="chip stake">${fmtMoney(t.penalty)}</span></div>
         ${del}
       </div>
       <div class="timer-block">
-        <div class="timer-row">${countdown}<span class="deadline-label">Ends ${fmtClock(t.deadline)}</span></div>
+        <div class="timer-row">${countdown}<span class="deadline-label">${fmtDeadline(t.deadline)}</span></div>
         <div class="progress"><div class="progress-fill" data-progress="${t.id}" style="width:${pct}%"></div></div>
       </div>
       ${btn}
@@ -193,17 +308,16 @@ function taskCardHTML(t, lead) {
     <div class="lead-body">
       <div class="ring-wrap">
         <svg viewBox="0 0 120 120" aria-hidden="true"><defs><linearGradient id="rg-${t.id}" class="ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0"/><stop offset="1"/></linearGradient></defs><circle class="ring-bg" cx="60" cy="60" r="54"/><circle class="ring-fg" cx="60" cy="60" r="54" pathLength="100" stroke="url(#rg-${t.id})" data-ring="${t.id}" style="stroke-dashoffset:${(100 - pct).toFixed(2)}"/></svg>
-        <div class="ring-center">${countdown}<span class="ring-caption">remaining</span></div>
+        <div class="ring-center">${countdown}</div>
       </div>
       <div class="lead-info">
         <div class="task-head">
-          <div class="task-title"><h3>${esc(t.name)}</h3><span class="chip stake">Up next</span></div>
+          <div class="task-title"><h3>${esc(t.name)}</h3></div>
           ${del}
         </div>
         <dl class="fact-list">
           <div class="fact"><dt>Stake</dt><dd>${fmtMoney(t.penalty)}</dd></div>
-          <div class="fact"><dt>Deadline</dt><dd>${fmtClock(t.deadline)}</dd></div>
-          <div class="fact wide"><dt>If time runs out</dt><dd>${fmtMoney(t.penalty)} goes to ${esc(selectedCharity().name)}</dd></div>
+          <div class="fact"><dt>Due</dt><dd>${fmtDeadline(t.deadline)}</dd></div>
         </dl>
         ${btn}
       </div>
@@ -211,16 +325,19 @@ function taskCardHTML(t, lead) {
   </article>`;
 }
 
+// What onboarding learned about this person, used to rank venues. Empty until they have answered.
+const prefsFromProfile = () => (state && state.profile ? { when: state.profile.when, blocker: state.profile.blocker } : {});
+
 /* ---------- recommended tasks ---------- */
 const RECOMMENDED = [
-  { name: 'Gym visit',       icon: '🏋️', h: 2, m: 0,  stake: 10, tint: '#ff8a4c', why: 'The classic. Photo of the gym floor.' },
-  { name: 'Morning run',     icon: '🏃', h: 1, m: 0,  stake: 5,  tint: '#4cb2ff', why: 'Short, measurable, easy to prove.' },
-  { name: 'Study session',   icon: '📚', h: 1, m: 0,  stake: 5,  tint: '#a78bff', why: 'Open books on a desk is enough.' },
-  { name: 'Deep work block', icon: '💻', h: 2, m: 0,  stake: 10, tint: '#1ef0a6', why: 'Two focused hours on one thing.' },
-  { name: 'Cook dinner',     icon: '🍳', h: 1, m: 0,  stake: 5,  tint: '#ffc233', why: 'Skip the takeout, save the stake.' },
-  { name: 'Tidy the room',   icon: '🧹', h: 0, m: 30, stake: 3,  tint: '#3dd9d0', why: 'A small win in 30 minutes.' },
-  { name: 'Yoga or stretch', icon: '🧘', h: 0, m: 30, stake: 5,  tint: '#ff6fae', why: 'Mat on the floor counts.' },
-  { name: 'Water the plants', icon: '🌿', h: 0, m: 30, stake: 3, tint: '#7be07b', why: 'Easy streak starter.' }
+  { name: 'Gym visit',       icon: '🏋️', h: 2, m: 0,  stake: 10, tint: '#ffb020', why: 'The classic. Photo of the gym floor.' },
+  { name: 'Morning run',     icon: '🏃', h: 1, m: 0,  stake: 5,  tint: '#7fd3e6', why: 'Short, measurable, easy to prove.' },
+  { name: 'Study session',   icon: '📚', h: 1, m: 0,  stake: 5,  tint: '#9fb4c3', why: 'Open books on a desk is enough.' },
+  { name: 'Deep work block', icon: '💻', h: 2, m: 0,  stake: 10, tint: '#35e0ff', why: 'Two focused hours on one thing.' },
+  { name: 'Cook dinner',     icon: '🍳', h: 1, m: 0,  stake: 5,  tint: '#ffb020', why: 'Skip the takeout, save the stake.' },
+  { name: 'Tidy the room',   icon: '🧹', h: 0, m: 30, stake: 3,  tint: '#1fb6d4', why: 'A small win in 30 minutes.' },
+  { name: 'Yoga or stretch', icon: '🧘', h: 0, m: 30, stake: 5,  tint: '#9fb4c3', why: 'Mat on the floor counts.' },
+  { name: 'Water the plants', icon: '🌿', h: 0, m: 30, stake: 3, tint: '#7fd3e6', why: 'Easy streak starter.' }
 ];
 
 function recommendedTasks() {
@@ -235,6 +352,7 @@ function recommendedTasks() {
     .map(({ r, n }) => ({ ...r, why: n ? `You have finished this ${n} time${n > 1 ? 's' : ''}.` : r.why }));
 }
 
+let recoToken = 0;
 function renderRecommended() {
   const list = recommendedTasks().slice(0, 7);
   $('#reco-title').classList.toggle('hidden', !list.length);
@@ -242,23 +360,30 @@ function renderRecommended() {
     <article class="reco" style="--tint:${r.tint};--i:${i + 2}">
       <div class="reco-top">
         <div class="reco-icon" aria-hidden="true">${r.icon}</div>
-        <div><h3>${esc(r.name)}</h3><p class="sub">${esc(r.why)}</p></div>
+        <div><h3>${esc(r.name)}</h3></div>
       </div>
       <div class="reco-meta">
-        <div><b>${r.h ? r.h + 'h' : ''}${r.m ? (r.h ? ' ' : '') + r.m + 'm' : ''}</b><span>Time limit</span></div>
-        <div><b>${fmtMoney(r.stake)}</b><span>Stake</span></div>
+        <div><b>${r.h ? r.h + 'h' : ''}${r.m ? (r.h ? ' ' : '') + r.m + 'm' : ''}</b></div>
+        <div><b>${fmtMoney(r.stake)}</b></div>
       </div>
-      <button class="btn ghost sm" data-reco="${esc(r.name)}">Start this task</button>
+      <div class="reco-where" data-where="${i}"></div>
+      <button class="btn ghost sm" data-reco="${esc(r.name)}">Start</button>
     </article>`).join('');
+
+  // venues load after the cards appear, so a slow data source never blocks the screen
+  const token = ++recoToken;
+  Promise.all(list.map(r => ASSIST.whereFor(r, r.h * 60 + r.m, prefsFromProfile()))).then(ws => {
+    if (token !== recoToken) return;
+    ws.forEach((w, i) => { const slot = document.querySelector(`[data-where="${i}"]`); if (slot) slot.innerHTML = ASSIST.whereHTML(w, true); });
+  });
 }
 
 function renderHome() {
   const active = state.tasks.filter(t => t.status === 'active').sort((a, b) => a.deadline - b.deadline);
-  const date = new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
   const atRisk = active.reduce((sum, t) => sum + t.penalty, 0);
-  $('#greet-date').textContent = active.length
-    ? `${date}. ${active.length} running, ${fmtMoney(atRisk)} on the line.`
-    : date;
+  const line = $('#greet-date');
+  line.textContent = active.length ? `${active.length} running, ${fmtMoney(atRisk)} at stake` : '';
+  line.classList.toggle('hidden', !active.length);
 
   const list = $('#tasks-active-list');
   list.classList.toggle('solo', active.length <= 1);
@@ -267,41 +392,99 @@ function renderHome() {
     : '';
   $$('.task-card', list).forEach((c, i) => c.style.setProperty('--i', i));
   $('#no-tasks').classList.toggle('hidden', active.length > 0);
+  $$('[data-badge="active"]').forEach(b => { b.textContent = active.length; b.classList.toggle('hidden', !active.length); });
   renderRecommended();
   updateTopbarBalance();
 }
 
-/* ---------- history: balance, results, activity ---------- */
+/* ---------- history: balance, insights, chart, results, activity ---------- */
+const DAY_MS = 86400000;
+let historyFilter = 'all', historyLimit = 8;
+const startOfDay = ts => { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); };
+const resolvedAt = t => (t.status === 'completed' ? t.completedAt : (t.failedAt || t.deadline));
+const resolvedTasks = () => state.tasks.filter(t => t.status !== 'active').sort((a, b) => resolvedAt(b) - resolvedAt(a));
+
+function dayLabel(ts) {
+  const diff = Math.round((startOfDay(Date.now()) - startOfDay(ts)) / DAY_MS);
+  if (diff <= 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return new Date(ts).toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+}
+
+function historyStats() {
+  const list = resolvedTasks();
+  const done = list.filter(t => t.status === 'completed');
+  let streak = 0;
+  for (const t of list) { if (t.status !== 'completed') break; streak++; }   // newest first, stop at the first miss
+  return {
+    list, done: done.length, missed: list.length - done.length, streak,
+    rate: list.length ? Math.round((done.length / list.length) * 100) : null,
+    kept: done.reduce((sum, t) => sum + t.penalty, 0)
+  };
+}
+
+// Two-tone bars for the last 14 days: completed on the bottom, missed stacked above.
+function chartData(list) {
+  const today = startOfDay(Date.now());
+  const days = Array.from({ length: 14 }, (_, i) => ({ ts: today - (13 - i) * DAY_MS, done: 0, missed: 0 }));
+  list.forEach(t => {
+    const d = days.find(x => x.ts === startOfDay(resolvedAt(t)));
+    if (d) t.status === 'completed' ? d.done++ : d.missed++;
+  });
+  return days;
+}
+function chartHTML(days) {
+  const max = Math.max(1, ...days.map(d => d.done + d.missed));
+  return days.map((d, i) => {
+    const label = new Date(d.ts).toLocaleDateString([], { weekday: 'narrow' });
+    const tip = `${new Date(d.ts).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}: ${d.done} completed, ${d.missed} missed`;
+    return `<div class="bar${i === 13 ? ' today' : ''}" title="${esc(tip)}">
+      <div class="bar-col"><i class="b-miss" style="height:${(d.missed / max) * 100}%"></i><i class="b-done" style="height:${(d.done / max) * 100}%"></i></div>
+      <span>${label}</span></div>`;
+  }).join('');
+}
+
 function historyItemHTML(t) {
   const done = t.status === 'completed';
-  const when = done ? t.completedAt : (t.failedAt || Date.now());
-  const meta = done
-    ? (t.proof ? `Verified at ${t.proof.ai.confidence}% confidence` : 'Completed')
-    : `${fmtMoney(t.charged || 0)} sent to charity`;
+  const when = resolvedAt(t);
+  const charity = state.charities.find(c => c.id === t.charityId);
+  const meta = done ? fmtClock(when) : `to ${charity ? charity.name : 'charity'}`;
+  const amount = done
+    ? `<span class="h-amt keep">+${fmtMoney(t.penalty)}</span>`
+    : `<span class="h-amt lost">-${fmtMoney(t.charged || 0)}</span>`;
   return `<div class="history-item ${done ? '' : 'failed'}">
-    <div class="h-main"><p>${esc(t.name)}</p><small>${meta}, ${timeAgo(when)}</small></div>
-    <span class="h-status">${done ? 'Done' : 'Missed'}</span>
-    ${done && t.proof ? `<button class="thumb" data-report="${t.id}" aria-label="View AI report"><img src="${t.proof.image}" alt="Proof photo"/></button>` : ''}
+    <span class="h-dot" aria-hidden="true"></span>
+    <div class="h-main"><p>${esc(t.name)}</p><small>${esc(meta)}</small></div>
+    ${amount}
+    ${done && t.proof ? `<button class="thumb" data-report="${t.id}" aria-label="View proof photo"><img src="${t.proof.image}" alt="Proof photo"/></button>` : ''}
   </div>`;
 }
 
 function renderRecord() {
+  const st = historyStats();
   $('#hero-balance').textContent = fmtMoney(state.balance);
-  $('#stat-completed').textContent = state.tasks.filter(t => t.status === 'completed').length;
-  $('#stat-missed').textContent = state.tasks.filter(t => t.status === 'failed').length;
+  $('#stat-completed').textContent = st.done;
+  $('#stat-missed').textContent = st.missed;
   $('#stat-sent').textContent = fmtMoney(state.totalSent);
 
-  const history = state.tasks.filter(t => t.status !== 'active')
-    .sort((a, b) => ((b.completedAt || b.failedAt) || 0) - ((a.completedAt || a.failedAt) || 0)).slice(0, 12);
-  $('#tasks-history-list').innerHTML = history.length
-    ? history.map(historyItemHTML).join('')
-    : '<p class="plain-empty">No completed or missed tasks yet.</p>';
+  const days = chartData(st.list);
+  const dd = days.reduce((n, d) => n + d.done, 0), dm = days.reduce((n, d) => n + d.missed, 0);
+  $('#chart').innerHTML = chartHTML(days);
+  $('#chart').setAttribute('aria-label', `In the last 14 days you completed ${dd} and missed ${dm} tasks.`);
 
-  const act = state.activity.slice(0, 8);
-  $('#activity-list').innerHTML = act.length
-    ? act.map(a => `<div class="activity-item"><p>${esc(a.text)}</p><small data-timeago="${a.at}">${timeAgo(a.at)}</small></div>`).join('')
-    : '<p class="plain-empty">No activity yet.</p>';
-  [$('#tasks-history-list'), $('#activity-list')].forEach(l => Array.from(l.children).forEach((c, i) => c.style.setProperty('--i', i + 4)));
+  // results, filtered and grouped by day
+  const shown = st.list.filter(t => historyFilter === 'all' || t.status === historyFilter);
+  const page = shown.slice(0, historyLimit);
+  let html = '', lastDay = null;
+  page.forEach(t => {
+    const label = dayLabel(resolvedAt(t));
+    if (label !== lastDay) { html += `<h3 class="day-head">${esc(label)}</h3>`; lastDay = label; }
+    html += historyItemHTML(t);
+  });
+  $('#tasks-history-list').innerHTML = html || `<p class="plain-empty">${st.list.length ? 'No matches.' : 'Nothing yet.'}</p>`;
+  $('#btn-history-more').classList.toggle('hidden', shown.length <= historyLimit);
+  $('#btn-history-more').textContent = 'Show more';
+  $$('#history-filter .seg-btn').forEach(b => { const on = b.dataset.hf === historyFilter; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
 }
 
 function updateTopbarBalance() { $('#topbar-balance').textContent = fmtMoney(state.balance); }
@@ -321,11 +504,12 @@ function failTask(t) {
   t.status = 'failed';
   t.failedAt = Date.now();
   t.charged = charged;
+  t.charityId = c.id;
   pushActivity('💸', `Missed "${t.name}" — ${fmtMoney(charged)} sent to ${c.name}`, 'penalty');
   saveState();
   flash();
-  toast(`Time's up on "${t.name}". ${fmtMoney(charged)} went to ${c.name}.`, 'warn');
-  if (state.balance <= 0) setTimeout(() => toast('Account is empty. Add funds in Settings.', 'error'), 400);
+  toast(`Missed "${t.name}". ${fmtMoney(charged)} to ${c.name}`, 'warn');
+  if (state.balance <= 0) setTimeout(() => toast('Balance is empty', 'error'), 400);
 }
 
 function completeTask(t, proof) {
@@ -341,13 +525,11 @@ function completeTask(t, proof) {
 /* ---------- completion celebration ---------- */
 function celebrate(t, proof) {
   const stake = fmtMoney(t.penalty);
-  $('#done-sub').textContent = proof ? `"${t.name}" verified at ${proof.ai.confidence}% confidence.` : `"${t.name}" is done.`;
-  $('#done-stake').textContent = `${stake} stays in your balance`;
+  $('#done-stake').textContent = `${stake} kept`;
   $('#overlay-done').classList.remove('hidden');
   document.body.classList.add('no-scroll');
   if (navigator.vibrate) navigator.vibrate([30, 50, 70]);
-  setTimeout(burst, 850);
-  setTimeout(() => $('#btn-done-close').focus(), 1500);
+  setTimeout(() => $('#btn-done-close').focus(), 800);
 }
 
 function closeCelebration() {
@@ -362,7 +544,7 @@ function deleteTask(id) {
   state.tasks = state.tasks.filter(x => x.id !== id);
   saveState();
   renderHome();
-  toast(`Removed "${t.name}"`, 'info');
+  toast('Removed', 'info');
 }
 
 /* ---------- live timers ---------- */
@@ -386,8 +568,9 @@ function tick() {
     const ring = $(`[data-ring="${t.id}"]`, card);
     if (ring) ring.style.strokeDashoffset = (100 - pct).toFixed(2);
     card.classList.toggle('long', fmtCountdown(remaining).length > RING_LONG);
-    card.classList.toggle('urgent', pct <= 25 && pct > 10);
-    card.classList.toggle('critical', pct <= 10);
+    const urgentMs = Math.min(t.durationMs * 0.25, 6 * 3600000), criticalMs = Math.min(t.durationMs * 0.10, 3600000);
+    card.classList.toggle('urgent', remaining <= urgentMs && remaining > criticalMs);
+    card.classList.toggle('critical', remaining <= criticalMs);
   });
 
   $$('[data-timeago]').forEach(el => { el.textContent = timeAgo(+el.dataset.timeago); });
@@ -395,12 +578,116 @@ function tick() {
   if (expired) renderAll();
 }
 
-/* ---------- add task ---------- */
-let selectedIcon = MOCK.EMOJIS[0];
+/* ---------- task help (nearby places, prices, plans) ---------- */
+function anyOtherOverlayOpen() {
+  return !!document.querySelector('.overlay:not(.hidden):not(#overlay-help), .guide-overlay:not(.hidden), .onb-overlay:not(.hidden), .proof-overlay:not(.hidden), .done-overlay:not(.hidden)');
+}
 
-function buildIconPicker() {
-  $('#at-icon-picker').innerHTML = MOCK.EMOJIS.map(e =>
-    `<button type="button" class="icon-pick ${e === selectedIcon ? 'active' : ''}" data-icon="${e}">${e}</button>`).join('');
+async function openHelp(task, mins, prefs) {
+  const help = await ASSIST.load(task, mins, prefs || prefsFromProfile());
+  $('#help-body').innerHTML = ASSIST.fullHTML(help);
+  $('#overlay-help').classList.remove('hidden');
+  document.body.classList.add('no-scroll');
+}
+
+function closeHelp() {
+  $('#overlay-help').classList.add('hidden');
+  if (!anyOtherOverlayOpen()) document.body.classList.remove('no-scroll');
+}
+
+/* ---------- add task ---------- */
+// The mock AI recognises a task by its icon, so pick one from the name instead of asking the person to.
+let selectedIcon = null;                 // set when a suggestion brings its own icon
+function iconFor(name) {
+  const E = MOCK.EMOJIS, kind = ASSIST.kindOf({ name });
+  const byKind = { gym: E[0], run: E[5], study: E[4], cook: E[1], yoga: E[6], work: E[2], art: E[8] };
+  if (byKind[kind]) return byKind[kind];
+  if (/tidy|clean|laundry|declutter|organi[sz]e/i.test(name)) return E[3];
+  if (/vitamin|pill|medic/i.test(name)) return E[7];
+  if (/plant|water/i.test(name)) return E[9];
+  return '📌';
+}
+
+// Time limit ("in 2 hours") or due date ("Friday 6 PM"). Both end up as one deadline timestamp.
+let addMode = 'duration';
+const localDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const MIN_LEAD_MS = 5 * 60000, MAX_LEAD_MS = 365 * 86400000;
+
+function computeDeadline() {
+  const now = Date.now();
+  if (addMode === 'duration') {
+    const h = Math.min(72, Math.max(0, +$('#at-hours').value || 0));
+    const m = Math.min(59, Math.max(0, +$('#at-minutes').value || 0));
+    const ms = (h * 60 + m) * 60000;
+    return ms > 0 ? { ok: true, deadline: now + ms, durationMs: ms } : { ok: false, error: 'Set a time limit' };
+  }
+  const date = $('#at-date').value, time = $('#at-time').value;
+  if (!date) return { ok: false, error: 'Pick a due date' };
+  if (!time) return { ok: false, error: 'Pick a due time' };
+  const [y, mo, d] = date.split('-').map(Number), [hh, mm] = time.split(':').map(Number);
+  const ts = new Date(y, mo - 1, d, hh, mm).getTime();
+  if (Number.isNaN(ts)) return { ok: false, error: 'Invalid date' };
+  if (ts - now < MIN_LEAD_MS) return { ok: false, error: 'Pick a time 5 or more minutes ahead' };
+  if (ts - now > MAX_LEAD_MS) return { ok: false, error: 'Up to a year ahead' };
+  return { ok: true, deadline: ts, durationMs: ts - now };
+}
+
+function updateDuePreview() {
+  const r = computeDeadline();
+  const box = $('#at-due-preview');
+  box.classList.toggle('bad', !r.ok && addMode === 'date' && !!$('#at-date').value);
+  if (r.ok) box.textContent = addMode === 'date'
+    ? `Due ${fmtDeadline(r.deadline)}`
+    : `Ends ${fmtDeadline(r.deadline)}`;
+  else box.textContent = addMode === 'date' && $('#at-date').value ? r.error : '';
+}
+
+function setAddMode(mode) {
+  addMode = mode;
+  $$('.seg-btn').forEach(b => { const on = b.dataset.mode === mode; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+  $('#at-mode-duration').classList.toggle('hidden', mode !== 'duration');
+  $('#at-mode-date').classList.toggle('hidden', mode !== 'date');
+  updateDuePreview();
+  updateAddAssist();
+}
+
+function setDatePreset(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  $('#at-date').value = localDate(d);
+  if (!$('#at-time').value) $('#at-time').value = '18:00';       // a preset should never leave the time blank
+  $$('#date-presets .chip').forEach(c => c.classList.toggle('active', +c.dataset.days === days));
+  // a due time that has already passed today would be refused, so move it to the next full hour
+  if (days === 0) {
+    const [hh, mm] = ($('#at-time').value || '18:00').split(':').map(Number);
+    if (new Date(d.getFullYear(), d.getMonth(), d.getDate(), hh, mm).getTime() - Date.now() < MIN_LEAD_MS) {
+      const next = new Date(Date.now() + 3600000);
+      $('#at-time').value = `${pad(next.getHours())}:00`;
+    }
+  }
+  updateDuePreview();
+  updateAddAssist();
+}
+
+function showCustomDuration(on) {
+  $('#at-custom').classList.toggle('hidden', !on);
+  const custom = $('#duration-presets [data-custom]');
+  custom.classList.toggle('active', on);
+  if (on) $$('#duration-presets [data-h]').forEach(c => c.classList.remove('active'));
+}
+
+// Under the task name: where the task could be done, when we recognise it (gym, run, study, cook, yoga, focus work, art, chores).
+let assistToken = 0;
+async function updateAddAssist() {
+  const box = $('#at-assist');
+  const token = ++assistToken;
+  const task = { name: $('#at-name').value.trim() };
+  const r = computeDeadline();
+  const mins = addMode === 'duration' && r.ok ? Math.round(r.durationMs / 60000) : undefined;   // a due date has no fixed session length
+  const [where, help] = await Promise.all([ASSIST.whereFor(task, mins, prefsFromProfile()), ASSIST.load(task, mins, prefsFromProfile())]);
+  if (token !== assistToken) return;            // a newer edit already replaced this answer
+  box.classList.toggle('hidden', !where);
+  box.innerHTML = where ? `${ASSIST.whereHTML(where)}${help ? '<button type="button" class="link-btn" id="at-assist-more">See details</button>' : ''}` : '';
 }
 
 function openAddTask(preset) {
@@ -410,9 +697,14 @@ function openAddTask(preset) {
   $('#at-hours').value = h;
   $('#at-minutes').value = m;
   $('#at-penalty').value = p ? p.stake : (state.defaultPenalty || 10);
-  selectedIcon = p && p.icon ? p.icon : MOCK.EMOJIS[0];
-  buildIconPicker();
-  $$('#duration-presets .chip').forEach(c => c.classList.toggle('active', +c.dataset.h === h && +c.dataset.m === m));
+  selectedIcon = p && p.icon ? p.icon : null;
+  const match = $$('#duration-presets [data-h]').find(c => +c.dataset.h === h && +c.dataset.m === m);
+  $$('#duration-presets .chip').forEach(c => c.classList.toggle('active', c === match));
+  showCustomDuration(!match);                       // a length that is not a preset opens the custom fields
+  $('#at-time').value = '18:00';
+  $('#at-date').min = localDate(new Date());
+  setDatePreset(1);                                  // the date picker starts on tomorrow
+  setAddMode('duration');
   $('#overlay-add').classList.remove('hidden');
   document.body.classList.add('no-scroll');
   setTimeout(() => $('#at-name').focus(), 60);
@@ -426,74 +718,98 @@ function closeAddTask() {
 function submitAddTask(e) {
   e.preventDefault();
   const name = $('#at-name').value.trim();
-  const h = Math.min(72, Math.max(0, +$('#at-hours').value || 0));
-  const m = Math.min(59, Math.max(0, +$('#at-minutes').value || 0));
-  const mins = h * 60 + m;
   const penalty = Math.max(1, Math.round(+$('#at-penalty').value) || state.defaultPenalty);
-  if (!name) { toast('Give your task a name', 'error'); return; }
-  if (mins <= 0) { toast('Set a time limit (hours or minutes)', 'error'); return; }
-  if (penalty > state.balance) { toast(`Your stake is more than your balance (${fmtMoney(state.balance)}). Lower it or add funds.`, 'error'); return; }
+  if (!name) { toast('Name your task', 'error'); return; }
+  const when = computeDeadline();
+  if (!when.ok) { toast(when.error, 'error'); return; }
+  if (penalty > state.balance) { toast(`Stake is above your balance (${fmtMoney(state.balance)})`, 'error'); return; }
 
-  const now = Date.now();
   state.tasks.unshift({
-    id: uid(), name, icon: selectedIcon, status: 'active',
-    createdAt: now, deadline: now + mins * 60000, durationMs: mins * 60000, penalty
+    id: uid(), name, icon: selectedIcon || iconFor(name), status: 'active', byDate: addMode === 'date',
+    createdAt: Date.now(), deadline: when.deadline, durationMs: when.durationMs, penalty
   });
   saveState();
   closeAddTask();
   renderHome();
-  toast(`Timer started for "${name}"`, 'success');
+  toast(`Started. Due ${fmtDeadline(when.deadline)}`, 'success');
 }
 
 /* ---------- charities ---------- */
-function renderCharities() {
-  $('#charities-list').innerHTML = state.charities.map((c, i) => `
-    <article class="charity-card ${c.id === state.selectedCharityId ? 'selected' : ''}" style="--i:${i + 1}">
-      <h3>${esc(c.name)}</h3>
+const yoursFor = id => state.tasks
+  .filter(t => t.status === 'failed' && (t.charityId || state.selectedCharityId) === id)
+  .reduce((sum, t) => sum + (t.charged || 0), 0);
+const goalPct = c => Math.min(100, Math.round((c.raised / c.goal) * 100));
+
+function goalHTML(c) {
+  return `<div class="goal"><div class="goal-bar" role="img" aria-label="${goalPct(c)}% of the goal raised"><i style="width:${goalPct(c)}%"></i></div>
+    <p><b>${fmtMoney(c.raised)}</b> of ${fmtMoney(c.goal)}</p></div>`;
+}
+
+function featureHTML(c) {
+  const yours = yoursFor(c.id);
+  return `<section class="ch-feature" data-cat="${esc(c.category)}">
+    <div class="ch-feature-main">
+      <span class="cat">${esc(c.category)}</span>
+      <h2>${esc(c.name)}</h2>
       <p class="sub">${esc(c.desc)}</p>
-      <div class="charity-foot">
-        <span class="raised">Raised ${fmtMoney(c.raised)}</span>
-        ${c.id === state.selectedCharityId
-          ? '<span class="badge-selected">Selected</span>'
-          : `<button class="btn ghost sm" data-select="${c.id}">Select</button>`}
-      </div>
-    </article>`).join('');
+      ${goalHTML(c)}
+    </div>
+    <dl class="ch-stats">
+      <div><dt>You gave</dt><dd>${fmtMoney(yours)}</dd></div>
+    </dl>
+  </section>`;
+}
+
+function charityCardHTML(c, i) {
+  return `<article class="charity-card" data-cat="${esc(c.category)}" style="--i:${i + 1}">
+    <div class="ch-top"><span class="cat">${esc(c.category)}</span></div>
+    <h3>${esc(c.name)}</h3>
+    <p class="sub">${esc(c.desc)}</p>
+    ${goalHTML(c)}
+    <div class="charity-foot"><button class="btn ghost sm" data-select="${c.id}">Choose</button></div>
+  </article>`;
+}
+
+function renderCharities() {
+  $('#charity-feature').innerHTML = featureHTML(selectedCharity());
+  $('#charities-list').innerHTML = state.charities.filter(c => c.id !== state.selectedCharityId).map(charityCardHTML).join('');
 }
 
 function selectCharity(id) {
   const c = state.charities.find(x => x.id === id);
-  if (!c) return;
+  if (!c || c.id === state.selectedCharityId) return;
   state.selectedCharityId = id;
   saveState();
   renderCharities();
-  toast(`Penalties will now go to ${c.name}`, 'success');
+  renderHome();                                    // the lead task card names the charity
+  window.scrollTo({ top: 0, behavior: reduceMotion() ? 'auto' : 'smooth' });
+  toast(`Charity: ${c.name}`, 'success');
 }
 
 /* ---------- settings ---------- */
 function renderSettings() {
-  $('#settings-username').textContent = (currentUser.username || '').charAt(0).toUpperCase() + (currentUser.username || '').slice(1);
+  $('#settings-username').textContent = currentUser.name;
   $('#set-balance').textContent = fmtMoney(state.balance);
-  $('#set-sent').textContent = fmtMoney(state.totalSent);
   $('#default-penalty').value = state.defaultPenalty;
 }
 
 function addFunds(amount) {
   const a = Math.round(+amount);
-  if (!a || a <= 0) { toast('Enter a valid amount', 'error'); return; }
+  if (!a || a <= 0) { toast('Enter an amount', 'error'); return; }
   state.balance += a;
   pushActivity('💰', `Added ${fmtMoney(a)} to account`, 'funds');
   saveState();
   renderAll();
-  toast(`${fmtMoney(a)} added to your account`, 'success');
+  toast(`${fmtMoney(a)} added`, 'success');
 }
 
 function resetDemoData() {
-  localStorage.removeItem(LS_STATE);
-  state = MOCK.seedState();
+  localStorage.removeItem(keyFor(LS_STATE));
+  state = newStateFor(currentUser.username);
   saveState();
   renderAll();
   showView('home');
-  toast('Demo data has been reset', 'info');
+  toast('Reset', 'info');
 }
 
 /* ---------- proof flow: camera capture (mobile) ---------- */
@@ -628,13 +944,10 @@ function renderPfResult() {
   const icon = $('#pf-verdict-icon');
   icon.textContent = pass ? '✓' : '✕';
   icon.classList.toggle('fail', !pass);
-  $('#pf-verdict-title').textContent = pass ? 'Verified!' : "Couldn't verify";
-  $('#pf-verdict-sub').textContent = pass
-    ? 'This photo looks like genuine proof of your task.'
-    : 'The AI is not confident this shows the activity. Try again — the timer keeps running.';
+  $('#pf-verdict-title').textContent = pass ? 'Verified' : "Couldn't verify";
+  $('#pf-verdict-sub').textContent = pass ? '' : 'Try again. The timer is still running.';
   $('#pf-conf-text').textContent = r.confidence + '%';
   requestAnimationFrame(() => { $('#pf-conf-fill').style.width = r.confidence + '%'; });
-  $('#pf-detected').innerHTML = r.detected.map(d => `<span class="chip">${esc(d)}</span>`).join('');
   $('#pf-result').classList.remove('hidden');
   if (pass) $('#btn-pf-done').classList.remove('hidden');
   else $('#btn-pf-retake').classList.remove('hidden');
@@ -647,11 +960,9 @@ function openReport(taskId) {
   const ai = t.proof.ai;
   $('#report-image').src = t.proof.image;
   $('#report-task-name').textContent = `${t.icon} ${t.name}`;
-  $('#report-verdict').textContent = ai.verdict === 'verified' ? 'Verified ✓' : 'Rejected ✗';
+  $('#report-verdict').textContent = ai.verdict === 'verified' ? 'Verified' : 'Rejected';
   $('#report-confidence').textContent = ai.confidence + '%';
   $('#report-time').textContent = new Date(ai.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-  $('#report-detected').innerHTML = ai.detected.map(d => `<span class="chip">${esc(d)}</span>`).join('');
-  $('#report-note').textContent = ai.note;
   $('#overlay-report').classList.remove('hidden');
   document.body.classList.add('no-scroll');
 }
@@ -704,24 +1015,62 @@ function closePhonePrompt() {
 }
 
 /* ---------- event bindings ---------- */
-function showLoginError(msg) {
+function showLoginError(msg, offerSignup = false) {
   const el = $('#login-error');
   el.textContent = msg;
   el.classList.remove('hidden');
-  const card = $('#login-card');
-  card.classList.remove('shake');
-  void card.offsetWidth;
-  card.classList.add('shake');
+  $('#login-to-signup').classList.toggle('hidden', !offerSignup);
+}
+
+/* ---------- sign in / create account screen ---------- */
+let authMode = 'signin';
+const regTouched = new Set();
+const regValues = () => ({ name: $('#reg-name').value, username: $('#reg-user').value, password: $('#reg-pass').value, confirm: $('#reg-pass2').value });
+const REG_FIELDS = { name: 'reg-name', username: 'reg-user', password: 'reg-pass', confirm: 'reg-pass2' };
+const STRENGTH_LABEL = ['Too short', 'Weak', 'Okay', 'Strong'];
+
+function setAuthMode(mode) {
+  authMode = mode;
+  $$('.auth-tabs .seg-btn').forEach(b => { const on = b.dataset.auth === mode; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+  $('#auth-signin').classList.toggle('hidden', mode !== 'signin');
+  $('#auth-signup').classList.toggle('hidden', mode !== 'signup');
+  $('#login-error').classList.add('hidden');
+  $('#login-to-signup').classList.add('hidden');
+  setTimeout(() => $(mode === 'signup' ? '#reg-name' : '#login-user').focus(), 30);
+}
+
+// Shows a message under each field that has been touched (or every field, after a submit attempt).
+function renderRegister(showAll = false) {
+  const v = regValues(), errors = validateRegistration(v);
+  Object.entries(REG_FIELDS).forEach(([key, id]) => {
+    const input = $('#' + id), msg = $('#err-' + id);
+    const show = showAll || (regTouched.has(key) && (key !== 'confirm' || v.confirm));
+    const bad = show && errors[key];
+    input.classList.toggle('invalid', !!bad);
+    input.setAttribute('aria-invalid', bad ? 'true' : 'false');
+    msg.classList.remove('ok');
+    msg.textContent = bad ? errors[key] : '';
+    if (!bad && key === 'username' && regTouched.has(key) && v.username.trim()) { msg.textContent = 'Available'; msg.classList.add('ok'); }
+  });
+  const level = passwordStrength(v.password);
+  $('#pw-meter').dataset.level = v.password ? level : 0;
+  return errors;
 }
 
 function bindEvents() {
-  // login
+  // sign in / create account
+  $$('.auth-tabs .seg-btn').forEach(b => b.addEventListener('click', () => setAuthMode(b.dataset.auth)));
+  $('#login-to-signup').addEventListener('click', () => {
+    const typed = $('#login-user').value.trim();
+    setAuthMode('signup');
+    if (typed) { $('#reg-user').value = typed; regTouched.add('username'); renderRegister(); }
+  });
   $('#login-form').addEventListener('submit', async e => {
     e.preventDefault();
     const u = $('#login-user').value.trim(), p = $('#login-pass').value;
     if (!u || !p) return showLoginError('Enter a username and password.');
-    const ok = await handleLogin(u, p);
-    if (!ok) showLoginError('Invalid credentials. (The first login creates the account.)');
+    const err = await handleLogin(u, p);
+    if (err) showLoginError(err.message, !!err.signup);
   });
   $('#btn-toggle-pass').addEventListener('click', () => {
     const i = $('#login-pass');
@@ -730,19 +1079,30 @@ function bindEvents() {
     $('#btn-toggle-pass').textContent = show ? 'Hide' : 'Show';
     $('#btn-toggle-pass').setAttribute('aria-label', show ? 'Hide password' : 'Show password');
   });
+
+  // registration: check as people type, after they have visited each field
+  Object.entries(REG_FIELDS).forEach(([key, id]) => {
+    $('#' + id).addEventListener('input', () => { if (key !== 'confirm' || $('#reg-pass2').value) regTouched.add(key); renderRegister(); });
+    $('#' + id).addEventListener('blur', () => { if ($('#' + id).value) { regTouched.add(key); renderRegister(); } });
+  });
+  $('#btn-toggle-reg-pass').addEventListener('click', () => {
+    const show = $('#reg-pass').type === 'password';
+    ['#reg-pass', '#reg-pass2'].forEach(sel => { $(sel).type = show ? 'text' : 'password'; });
+    $('#btn-toggle-reg-pass').textContent = show ? 'Hide' : 'Show';
+    $('#btn-toggle-reg-pass').setAttribute('aria-label', show ? 'Hide passwords' : 'Show passwords');
+  });
+  $('#register-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const errors = registerAccount(regValues());
+    if (!errors) return;
+    renderRegister(true);
+    const first = Object.keys(REG_FIELDS).find(k => errors[k]);
+    $('#' + REG_FIELDS[first]).focus();
+  });
   $('#demo-fill').addEventListener('click', () => {
     $('#login-user').value = 'demo';
     $('#login-pass').value = 'demo123';
     $('#login-form').requestSubmit();
-  });
-
-  // pointer spotlight on cards
-  document.addEventListener('pointermove', e => {
-    const c = e.target.closest && e.target.closest('.task-card,.reco,.charity-card,.ledger');
-    if (!c) return;
-    const r = c.getBoundingClientRect();
-    c.style.setProperty('--mx', (e.clientX - r.left) + 'px');
-    c.style.setProperty('--my', (e.clientY - r.top) + 'px');
   });
 
   // navigation + logout
@@ -753,6 +1113,19 @@ function bindEvents() {
   $('#btn-logout').addEventListener('click', logout);
   $('#btn-logout2').addEventListener('click', logout);
 
+  // appearance
+  $('#theme-choice').addEventListener('click', e => { const b = e.target.closest('[data-theme-choice]'); if (b) applyTheme(b.dataset.themeChoice); });
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener && window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (themeChoice() === 'auto') applyTheme('auto'); });
+  applyTheme(themeChoice());
+
+  // history: filter, show more
+  $('#history-filter').addEventListener('click', e => {
+    const b = e.target.closest('[data-hf]');
+    if (!b) return;
+    historyFilter = b.dataset.hf; historyLimit = 8;
+    renderRecord();
+  });
+  $('#btn-history-more').addEventListener('click', () => { historyLimit += 8; renderRecord(); });
   // history: add funds lives in settings
   $('#btn-add-funds-hero').addEventListener('click', () => showView('settings'));
 
@@ -770,25 +1143,35 @@ function bindEvents() {
   $('#btn-cancel-add').addEventListener('click', closeAddTask);
   $('#overlay-add').addEventListener('click', e => { if (e.target.id === 'overlay-add') closeAddTask(); });
   $('#add-task-form').addEventListener('submit', submitAddTask);
-  $('#at-icon-picker').addEventListener('click', e => {
-    const b = e.target.closest('[data-icon]');
-    if (!b) return;
-    selectedIcon = b.dataset.icon;
-    $$('#at-icon-picker .icon-pick').forEach(x => x.classList.toggle('active', x === b));
+  ['#at-name', '#at-hours', '#at-minutes', '#at-date', '#at-time'].forEach(sel => $(sel).addEventListener('input', () => { updateDuePreview(); updateAddAssist(); }));
+  $('#at-date').addEventListener('input', () => $$('#date-presets .chip').forEach(c => c.classList.remove('active')));
+  $$('.seg-btn').forEach(b => b.addEventListener('click', () => setAddMode(b.dataset.mode)));
+  $('#date-presets').addEventListener('click', e => { const c = e.target.closest('[data-days]'); if (c) setDatePreset(+c.dataset.days); });
+  $('#at-assist').addEventListener('click', e => {
+    if (!e.target.closest('#at-assist-more')) return;
+    const r = computeDeadline();
+    openHelp({ name: $('#at-name').value.trim() }, addMode === 'duration' && r.ok ? Math.round(r.durationMs / 60000) : undefined);
   });
+  $('#btn-help-close').addEventListener('click', closeHelp);
+  $('#overlay-help').addEventListener('click', e => { if (e.target.id === 'overlay-help') closeHelp(); });
   $('#duration-presets').addEventListener('click', e => {
     const c = e.target.closest('.chip');
     if (!c) return;
+    if (c.dataset.custom) { showCustomDuration(true); updateDuePreview(); updateAddAssist(); return; }
     $('#at-hours').value = c.dataset.h;
     $('#at-minutes').value = c.dataset.m;
-    $$('#duration-presets .chip').forEach(x => x.classList.toggle('active', x === c));
+    showCustomDuration(false);
+    $$('#duration-presets [data-h]').forEach(x => x.classList.toggle('active', x === c));
+    updateDuePreview();
+    updateAddAssist();
   });
-  ['#at-hours', '#at-minutes'].forEach(sel => $(sel).addEventListener('input', () => {
-    $$('#duration-presets .chip').forEach(x => x.classList.remove('active'));
-  }));
+  // typing a length by hand keeps "Custom" selected
+  ['#at-hours', '#at-minutes'].forEach(sel => $(sel).addEventListener('input', () => { showCustomDuration(true); }));
 
   // home list: complete / delete / report + charity select (delegated)
   document.addEventListener('click', e => {
+    const hp = e.target.closest('[data-help]');
+    if (hp) { const t = taskById(hp.dataset.help); if (t) openHelp({ name: t.name }, t.byDate ? undefined : Math.round(t.durationMs / 60000)); return; }
     const c = e.target.closest('[data-complete]'); if (c) return handleComplete(c);
     const d = e.target.closest('[data-delete]'); if (d) return deleteTask(d.dataset.delete);
     const r = e.target.closest('[data-report]'); if (r) openReport(r.dataset.report);
@@ -800,16 +1183,12 @@ function bindEvents() {
     const c = e.target.closest('[data-amount]');
     if (c) addFunds(c.dataset.amount);
   });
-  $('#btn-add-custom').addEventListener('click', () => {
-    addFunds($('#custom-funds').value);
-    $('#custom-funds').value = '';
-  });
   $('#btn-save-default').addEventListener('click', () => {
     const v = Math.round(+$('#default-penalty').value);
-    if (!v || v < 1) return toast('Enter a valid amount', 'error');
+    if (!v || v < 1) return toast('Enter an amount', 'error');
     state.defaultPenalty = v;
     saveState();
-    toast('Default stake saved', 'success');
+    toast('Saved', 'success');
   });
   $('#btn-reset').addEventListener('click', e => twoStep(e.currentTarget, resetDemoData));
 
@@ -845,7 +1224,8 @@ function bindEvents() {
   // escape closes topmost overlay
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    if (!$('#overlay-done').classList.contains('hidden')) closeCelebration();
+    if (!$('#overlay-help').classList.contains('hidden')) closeHelp();
+    else if (!$('#overlay-done').classList.contains('hidden')) closeCelebration();
     else if (!$('#overlay-proof').classList.contains('hidden')) closeProofFlow();
     else if (!$('#overlay-phone').classList.contains('hidden')) closePhonePrompt();
     else if (!$('#overlay-report').classList.contains('hidden')) closeReport();
@@ -855,20 +1235,11 @@ function bindEvents() {
 
 /* ---------- init ---------- */
 document.addEventListener('DOMContentLoaded', () => {
-  initState();
+  migrateLegacy();
   bindEvents();
   startTick();
   const session = localStorage.getItem(LS_SESSION);
-  const user = storedUser();
-  if (session && user && user.username === session) {
-    currentUser = { username: user.username };
-    enterApp();
+  if (session && getUsers()[session]) {
+    startSession(session);
   }
 });
-
-
-
-
-
-
-
