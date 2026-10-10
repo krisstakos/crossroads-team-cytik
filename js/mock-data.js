@@ -85,7 +85,7 @@ const MOCK = (function () {
   }
 
   // Bump this when the demo's starting numbers change: a demo saved under an older version is replaced by the new one.
-  const SEED_VERSION = 4;
+  const SEED_VERSION = 5;
 
   function seedState() {
     const now = Date.now();
@@ -103,9 +103,7 @@ const MOCK = (function () {
         // running tasks are spread over the coming week; byDate ones are due on a day, not after a set length
         { id: 't1', name: 'Morning workout', icon: '🏋️', status: 'active', createdAt: now - 20 * 60000, durationMs: 45 * 60000, deadline: now + 25 * 60000, penalty: 10 },
         { id: 't2', name: 'Cook dinner', icon: '🍳', status: 'active', createdAt: now - 10 * 60000, durationMs: 2 * 3600000, deadline: now + 110 * 60000, penalty: 15 },
-        { id: 't5', name: 'Gym visit', icon: '🏋️', status: 'active', byDate: true, createdAt: now - 3 * 3600000, durationMs: 2 * 86400000 + 3 * 3600000, deadline: now + 2 * 86400000, penalty: 10 },
         { id: 't3', name: 'Work on my app', icon: '💻', status: 'active', byDate: true, createdAt: now - 6 * 3600000, durationMs: 3 * 86400000 + 6 * 3600000, deadline: now + 3 * 86400000, penalty: 20 },
-        { id: 't6', name: 'Read 20 pages', icon: '📚', status: 'active', byDate: true, createdAt: now - 3600000, durationMs: 5 * 86400000 + 3600000, deadline: now + 5 * 86400000, penalty: 10 },
         { id: 't4', name: 'Clean the home', icon: '🧹', status: 'active', byDate: true, createdAt: now - 5 * 60000, durationMs: 7 * 86400000, deadline: now + 7 * 86400000 - 5 * 60000, penalty: 12 }
       ],
       activity: activityFor(past7, now)
