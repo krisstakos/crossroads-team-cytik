@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="theme-color" content="#0a0d14"/>
+<title>Commit — Stay Accountable</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Non-blocking font load: falls back to system fonts if the CDN is slow/unreachable -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
+<link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="view-login" class="login-view">
+  <div class="login-bg"><div class="blob b1"></div><div class="blob b2"></div></div>
+  <div class="login-card" id="login-card">
+    <div class="logo-row">
+      <div class="logo-mark">✓</div>
+      <div>
+        <h1>Commit</h1>
+        <p class="tagline">Miss your goal? Your money goes to charity.</p>
+      </div>
+    </div>
+    <form id="login-form" novalidate>
+      <label class="field">
+        <span>Username</span>
+        <input id="login-user" type="text" placeholder="e.g. alex" autocomplete="username" required/>
+      </label>
+      <label class="field">
+        <span>Password</span>
+        <div class="pass-wrap">
+          <input id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password" required/>
+          <button type="button" id="btn-toggle-pass" class="eye-btn" aria-label="Show password">👁</button>
+        </div>
+      </label>
+      <p id="login-error" class="form-error hidden"></p>
+      <button type="submit" class="btn primary block">Sign in</button>
+    </form>
+    <button id="demo-fill" class="link-btn center">Use demo account (demo / demo123)</button>
+  </div>
+</div>
+
+<!-- ================= APP SHELL ================= -->
+<div id="app-shell" class="shell hidden">
+
+  <!-- Desktop sidebar -->
+  <aside class="sidebar">
+    <div class="logo-row side">
+      <div class="logo-mark sm">✓</div>
+      <h2>Commit</h2>
+    </div>
+    <nav class="side-nav">
+      <button class="nav-item active" data-view="home"><span class="ni-icon">🏠</span> Home</button>
+      <button class="nav-item" data-view="charities"><span class="ni-icon">💝</span> Charities</button>
+      <button class="nav-item" data-view="settings"><span class="ni-icon">⚙️</span> Settings</button>
+    </nav>
+    <div class="side-footer">
+      <div class="user-chip">
+        <div class="avatar" id="side-avatar">A</div>
+        <div><p id="side-username" class="u-name">alex</p><p class="u-sub">Mock account</p></div>
+      </div>
+      <button id="btn-logout" class="link-btn danger">Sign out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- Mobile top bar -->
+    <header class="topbar">
+      <div class="logo-row mini"><div class="logo-mark xs">✓</div><span class="brand">Commit</span></div>
+      <button id="topbar-balance" class="balance-pill">$0.00</button>
+    </header>
+
+    <!-- ============ HOME ============ -->
+    <section id="view-home" class="view">
+      <div class="page-head">
+        <div>
+          <h1 id="greeting">Good morning 👋</h1>
+          <p class="sub" id="greet-date"></p>
+        </div>
+        <button id="btn-add-task-desktop" class="btn primary desktop-only">+ New task</button>
+      </div>
+
+      <div class="hero card">
+        <div class="hero-left">
+          <p class="hero-label">Account balance</p>
+          <p class="hero-balance" id="hero-balance">$0.00</p>
+          <p class="hero-sub">Linked account •••• 4821 · mock</p>
+        </div>
+        <button id="btn-add-funds-hero" class="btn ghost">+ Add funds</button>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat card"><span class="stat-num" id="stat-active">0</span><span class="stat-label">Active tasks</span></div>
+        <div class="stat card"><span class="stat-num" id="stat-completed">0</span><span class="stat-label">Completed</span></div>
+        <div class="stat card"><span class="stat-num" id="stat-sent">$0</span><span class="stat-label">Sent to charity</span></div>
+      </div>
+
+      <div class="info-banner card hidden" id="how-it-works">
+        <p><b>How it works:</b> 1️⃣ Set a task &amp; stake → 2️⃣ beat the timer with photo proof (AI verifies) → 3️⃣ miss it and your money goes to charity.</p>
+        <button id="hiw-dismiss" class="icon-btn sm" aria-label="Dismiss">✕</button>
+      </div>
+
+      <h2 class="section-title">Active tasks <span class="count-badge" id="active-count">0</span></h2>
+      <div id="tasks-active-list" class="task-grid"></div>
+      <p id="no-tasks" class="empty hidden">No active tasks. Add one and start the clock ⏱️</p>
+
+      <h2 class="section-title">History</h2>
+      <div id="tasks-history-list" class="history-card card"></div>
+
+      <h2 class="section-title">Recent activity</h2>
+      <div id="activity-list" class="card activity-card"></div>
+    </section>
+
+    <!-- ============ CHARITIES ============ -->
+    <section id="view-charities" class="view hidden">
+      <div class="page-head">
+        <div>
+          <h1>Your charity</h1>
+          <p class="sub">When you miss a task, your stake is sent here. Pick who benefits from your discipline.</p>
+        </div>
+      </div>
+      <div id="charities-list" class="charity-grid"></div>
+    </section>
+
+    <!-- ============ SETTINGS ============ -->
+    <section id="view-settings" class="view hidden">
+      <div class="page-head">
+        <div><h1>Settings</h1><p class="sub">Account, payments &amp; preferences.</p></div>
+      </div>
+
+      <div class="settings-stack">
+        <div class="card settings-card">
+          <h3>Profile</h3>
+          <div class="row-between" style="margin-top:14px">
+            <div class="user-chip">
+              <div class="avatar" id="set-avatar">A</div>
+              <div><p id="settings-username" class="u-name">alex</p><p class="u-sub">Mock account · no backend</p></div>
+            </div>
+            <button id="btn-logout2" class="btn ghost sm danger-text">Sign out</button>
+          </div>
+        </div>
+
+        <div class="card settings-card">
+          <h3>Payment account</h3>
+          <p class="sub" style="margin-top:6px">Balance: <strong id="set-balance">$0.00</strong> · Total sent to charity: <strong id="set-sent">$0</strong></p>
+          <p class="label" style="margin-top:18px">Add funds (mock)</p>
+          <div class="chip-row" id="funds-chips">
+            <button class="chip" data-amount="25">+$25</button>
+            <button class="chip" data-amount="50">+$50</button>
+            <button class="chip" data-amount="100">+$100</button>
+          </div>
+          <div class="inline-form">
+            <input id="custom-funds" type="number" min="1" placeholder="Custom amount"/>
+            <button id="btn-add-custom" class="btn primary sm">Add</button>
+          </div>
+        </div>
+
+        <div class="card settings-card">
+          <h3>Default stake</h3>
+          <p class="sub" style="margin-top:6px">Pre-filled when you create a new task.</p>
+          <div class="inline-form" style="margin-top:14px">
+            <span class="dollar-sign">$</span>
+            <input id="default-penalty" type="number" min="1" value="10"/>
+            <button id="btn-save-default" class="btn primary sm">Save</button>
+          </div>
+        </div>
+
+        <div class="card settings-card danger-zone">
+          <h3>Danger zone</h3>
+          <p class="sub" style="margin-top:6px">Reset all demo data (tasks, balance, history).</p>
+          <button id="btn-reset" class="btn ghost sm danger-text" style="margin-top:14px">Reset demo data</button>
+        </div>
+      </div>
+    </section>
+
+  <!-- Mobile bottom nav -->
+  <nav class="bottom-nav">
+    <button class="bn-item active" data-view="home"><span>🏠</span><small>Home</small></button>
+    <button class="bn-item" data-view="charities"><span>💝</span><small>Charity</small></button>
+    <button class="bn-item" data-view="settings"><span>⚙️</span><small>Settings</small></button>
+  </nav>
+  <button id="fab-add" class="fab" aria-label="Add task">+</button>
+</div>
+
+<!-- ================= ADD TASK OVERLAY ================= -->
+<div id="overlay-add" class="overlay hidden">
+  <div class="sheet card">
+    <h3>New task</h3>
+    <p class="sub" style="margin:4px 0 18px">Set a deadline and put money on the line.</p>
+    <form id="add-task-form">
+      <label class="field"><span>Task name</span><input id="at-name" type="text" placeholder="e.g. Go to the gym" maxlength="40"/></label>
+      <div class="field"><span>Icon</span><div id="at-icon-picker" class="icon-row"></div></div>
+      <div class="field two-col">
+        <div><span>Hours</span><input id="at-hours" type="number" min="0" max="72" value="1"/></div>
+        <div><span>Minutes</span><input id="at-minutes" type="number" min="0" max="59" value="0"/></div>
+      </div>
+      <div class="chip-row" id="duration-presets">
+        <button type="button" class="chip" data-h="0" data-m="30">30m</button>
+        <button type="button" class="chip active" data-h="1" data-m="0">1h</button>
+        <button type="button" class="chip" data-h="2" data-m="0">2h</button>
+        <button type="button" class="chip" data-h="4" data-m="0">4h</button>
+        <button type="button" class="chip" data-h="8" data-m="0">8h</button>
+      </div>
+      <label class="field" style="margin-top:16px"><span>Your stake ($)</span><input id="at-penalty" type="number" min="1" value="10"/></label>
+      <p class="hint">If the timer hits zero, this amount is sent to your charity.</p>
+      <div class="sheet-actions">
+        <button type="button" class="btn ghost" id="btn-cancel-add">Cancel</button>
+        <button type="submit" class="btn primary">Start timer ⏱️</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ================= PROOF FLOW (mobile camera + AI) ================= -->
+<div id="overlay-proof" class="proof-overlay hidden">
+  <!-- Stage 1: viewfinder -->
+  <div id="pf-camera" class="pf-stage">
+    <video id="pf-video" playsinline muted></video>
+    <div class="pf-top">
+      <button id="btn-pf-cancel" class="icon-btn light" aria-label="Cancel">✕</button>
+      <span id="pf-task-name" class="pf-title"></span>
+    </div>
+    <div id="pf-camera-error" class="pf-error hidden">
+      <p>📷 Camera unavailable.<br/>Use a photo from your library instead.</p>
+      <label class="btn primary sm">Choose photo<input id="pf-file-fallback" type="file" accept="image/*" hidden/></label>
+    </div>
+    <div class="pf-bottom">
+      <button id="btn-capture" class="capture-btn" aria-label="Capture photo"><span></span></button>
+    </div>
+  </div>
+
+  <!-- Stage 2: AI analysis -->
+  <div id="pf-analysis" class="pf-stage hidden">
+    <div class="pf-img-wrap"><img id="pf-image" alt="Captured proof"/><div class="scanline"></div></div>
+    <div class="card pf-steps">
+      <p class="ai-head"><span class="ai-dot"></span> AI verification</p>
+      <ul id="pf-step-list">
+        <li data-step="0">Detecting scene &amp; objects…</li>
+        <li data-step="1">Matching against task context…</li>
+        <li data-step="2">Checking for edits or manipulation…</li>
+      </ul>
+    </div>
+    <div id="pf-result" class="card pf-result hidden">
+      <div id="pf-verdict-icon"></div>
+      <h3 id="pf-verdict-title"></h3>
+      <p id="pf-verdict-sub" class="sub"></p>
+      <div class="conf-row"><span>Confidence</span><b id="pf-conf-text">0%</b></div>
+      <div class="conf-bar"><div id="pf-conf-fill"></div></div>
+      <div id="pf-detected" class="chip-row wrap center-chips"></div>
+    </div>
+    <div class="pf-actions">
+      <button id="btn-pf-retake" class="btn ghost hidden">Retake photo</button>
+      <button id="btn-pf-done" class="btn primary block hidden">Confirm &amp; complete ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= PHONE PROMPT (desktop: complete on phone) ================= -->
+<div id="overlay-phone" class="overlay hidden">
+  <div class="sheet card phone-sheet">
+    <div class="phone-icon">📱</div>
+    <h3>Complete this on your phone</h3>
+    <p class="sub">Tasks can only be completed with camera proof. Open Commit on your mobile device and tap "Complete 📷" there — the timer keeps running.</p>
+    <button id="btn-phone-ok" class="btn primary block">Got it</button>
+  </div>
+</div>
+
+<!-- ================= AI REPORT MODAL ================= -->
+<div id="overlay-report" class="overlay hidden">
+  <div class="sheet card report-sheet">
+    <div class="row-between"><h3>AI verification report</h3><button id="btn-close-report" class="icon-btn" aria-label="Close">✕</button></div>
+    <img id="report-image" alt="Proof of completion"/>
+    <p class="report-task" id="report-task-name"></p>
+    <div class="report-grid">
+      <div><span>Verdict</span><b id="report-verdict"></b></div>
+      <div><span>Confidence</span><b id="report-confidence"></b></div>
+      <div><span>Captured at</span><b id="report-time"></b></div>
+      <div><span>Model</span><b>ProofNet v2 (mock)</b></div>
+    </div>
+    <p class="label" style="margin-top:16px">Detected elements</p>
+    <div id="report-detected" class="chip-row wrap"></div>
+    <p class="hint" id="report-note"></p>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="js/mock-data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
+
+
+
