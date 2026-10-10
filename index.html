@@ -25,6 +25,7 @@
   <symbol id="i-charity" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></symbol>
   <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M4 7h16v3a2 2 0 0 0 0 4v3H4v-3a2 2 0 0 0 0-4z"/><path d="M14 7v10" stroke-dasharray="1.5 2"/></symbol>
   <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z"/><circle cx="12" cy="10" r="2.4"/></symbol>
+  <symbol id="i-retry" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8"/><path d="M20 4v5h-5"/></symbol>
   <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
   <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2"/><circle cx="9" cy="16" r="2"/></symbol>
 </svg>
@@ -124,6 +125,13 @@
       </div>
     </header>
 
+    <button id="offer-banner" class="offer-banner hidden" type="button" aria-live="polite">
+      <svg class="ico ob-ico" aria-hidden="true"><use href="#i-retry"/></svg>
+      <span class="ob-text"><b>One more try?</b> <span id="ob-name"></span></span>
+      <span class="num" id="ob-timer" data-offer-timer=""></span>
+      <span class="ob-go">View</span>
+    </button>
+
     <!-- ============ TODAY ============ -->
     <section id="view-home" class="view">
       <div class="page-head">
@@ -134,6 +142,7 @@
         <button id="btn-add-task-desktop" class="btn primary desktop-only">New task</button>
       </div>
 
+      <div id="offers" class="offers"></div>
       <div id="tasks-active-list" class="timer-list"></div>
       <div id="no-tasks" class="empty hidden">
         <p class="empty-title">No tasks yet</p>

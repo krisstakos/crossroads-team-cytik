@@ -88,10 +88,10 @@ function playRecordCounters() {
   countUp($('#stat-sent'), state.totalSent, roundMoney);
 }
 
-function flash() {
+function flash(kind) {
   if (reduceMotion()) return;
   const f = document.createElement('div');
-  f.className = 'flash';
+  f.className = 'flash' + (kind ? ' ' + kind : '');
   document.body.appendChild(f);
   setTimeout(() => f.remove(), 900);
 }
@@ -262,6 +262,7 @@ function showView(name) {
   });
   window.scrollTo({ top: 0 });
   document.body.dataset.view = name;
+  if (state) renderOfferBanner();
   if (name === 'record' && state) playRecordCounters();
 }
 
@@ -291,16 +292,16 @@ function taskCardHTML(t, lead) {
   const text = fmtCountdown(remaining);
   const complete = `<button class="btn primary complete-btn" data-complete="${t.id}">Complete</button>`;
   const help = ASSIST.kindOf(t) ? `<button class="btn ghost help-btn" data-help="${t.id}">Help</button>` : '';
-  const bail = `<button class="btn ghost bail-btn" data-bail="${t.id}">Bail out</button>`;
+  const bail = (t.attempt || 1) === 2 ? '' : `<button class="btn ghost bail-btn" data-bail="${t.id}">Bail out</button>`;
   const btn = `<div class="card-actions">${complete}${help}${bail}</div>`;
-  const del = `<button class="icon-btn delete-btn" data-delete="${t.id}" aria-label="Delete ${esc(t.name)}">✕</button>`;
+  const retryClass = (t.attempt || 1) === 2 ? ' retry' : '';
+  const retryChip = (t.attempt || 1) === 2 ? '<span class="chip stake retry">One more try</span>' : '';
   const countdown = `<span class="countdown" data-countdown="${t.id}" aria-label="${text} remaining">${digitsHTML(text)}</span>`;
 
   if (!lead) {
-    return `<article class="task-card" data-task-id="${t.id}">
+    return `<article class="task-card${retryClass}" data-task-id="${t.id}">
       <div class="task-head">
-        <div class="task-title"><h3>${esc(t.name)}</h3><span class="chip stake">${fmtMoney(t.penalty)}</span></div>
-        ${del}
+        <div class="task-title"><h3>${esc(t.name)}</h3><span class="chip stake">${fmtMoney(t.penalty)}</span>${retryChip}</div>
       </div>
       <div class="timer-block">
         <div class="timer-row">${countdown}<span class="deadline-label">${fmtDeadline(t.deadline)}</span></div>
@@ -310,7 +311,7 @@ function taskCardHTML(t, lead) {
     </article>`;
   }
 
-  return `<article class="task-card lead${text.length > RING_LONG ? ' long' : ''}" data-task-id="${t.id}">
+  return `<article class="task-card lead${text.length > RING_LONG ? ' long' : ''}${retryClass}" data-task-id="${t.id}">
     <div class="lead-body">
       <div class="ring-wrap">
         <svg viewBox="0 0 120 120" aria-hidden="true"><defs><linearGradient id="rg-${t.id}" class="ring-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0"/><stop offset="1"/></linearGradient></defs><circle class="ring-bg" cx="60" cy="60" r="54"/><circle class="ring-fg" cx="60" cy="60" r="54" pathLength="100" stroke="url(#rg-${t.id})" data-ring="${t.id}" style="stroke-dashoffset:${(100 - pct).toFixed(2)}"/></svg>
@@ -318,8 +319,7 @@ function taskCardHTML(t, lead) {
       </div>
       <div class="lead-info">
         <div class="task-head">
-          <div class="task-title"><h3>${esc(t.name)}</h3></div>
-          ${del}
+          <div class="task-title"><h3>${esc(t.name)}</h3>${retryChip}</div>
         </div>
         <dl class="fact-list">
           <div class="fact"><dt>Stake</dt><dd>${fmtMoney(t.penalty)}</dd></div>
@@ -391,13 +391,18 @@ function renderHome() {
   line.textContent = active.length ? `${active.length} running, ${fmtMoney(atRisk)} at stake` : '';
   line.classList.toggle('hidden', !active.length);
 
+  const offers = state.tasks.filter(t => t.status === 'offer').sort((a, b) => a.offerExpiresAt - b.offerExpiresAt);
+  $('#offers').innerHTML = offers.map(offerCardHTML).join('');
+
   const list = $('#tasks-active-list');
   list.innerHTML = active.length
     ? taskCardHTML(active[0], true) + (active.length > 1 ? `<div class="rest">${active.slice(1).map(t => taskCardHTML(t, false)).join('')}</div>` : '')
     : '';
   $$('.task-card', list).forEach((c, i) => c.style.setProperty('--i', i));
-  $('#no-tasks').classList.toggle('hidden', active.length > 0);
-  $$('[data-badge="active"]').forEach(b => { b.textContent = active.length; b.classList.toggle('hidden', !active.length); });
+  $('#no-tasks').classList.toggle('hidden', active.length > 0 || offers.length > 0);
+  const attention = active.length + offers.length;
+  $$('[data-badge="active"]').forEach(b => { b.textContent = attention; b.classList.toggle('hidden', !attention); b.classList.toggle('offer', offers.length > 0); });
+  renderOfferBanner();
   renderRecommended();
   updateTopbarBalance();
 }
@@ -407,7 +412,7 @@ const DAY_MS = 86400000;
 let historyFilter = 'all', historyLimit = 8;
 const startOfDay = ts => { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); };
 const resolvedAt = t => (t.status === 'completed' ? t.completedAt : t.status === 'bailed' ? t.bailedAt : (t.failedAt || t.deadline));
-const resolvedTasks = () => state.tasks.filter(t => t.status !== 'active').sort((a, b) => resolvedAt(b) - resolvedAt(a));
+const resolvedTasks = () => state.tasks.filter(t => t.status === 'completed' || t.status === 'failed' || t.status === 'bailed').sort((a, b) => resolvedAt(b) - resolvedAt(a));
 
 function dayLabel(ts) {
   const diff = Math.round((startOfDay(Date.now()) - startOfDay(ts)) / DAY_MS);
@@ -461,7 +466,7 @@ function historyItemHTML(t) {
   const done = t.status === 'completed';
   const when = resolvedAt(t);
   const charity = state.charities.find(c => c.id === t.charityId);
-  const meta = done ? fmtClock(when) : `to ${charity ? charity.name : 'charity'}`;
+  const meta = done ? (t.wonBack ? 'Won back' : fmtClock(when)) : `${t.retryMissed ? 'Missed twice, ' : ''}to ${charity ? charity.name : 'charity'}`;
   const amount = done
     ? `<span class="h-amt keep">+${fmtMoney(t.penalty)}</span>`
     : `<span class="h-amt lost">-${fmtMoney(t.charged || 0)}</span>`;
@@ -513,7 +518,40 @@ function pushActivity(icon, text, type) {
   if (state.activity.length > 30) state.activity.length = 30;
 }
 
+/* ---------- one more try ----------
+   The first miss does not send the stake. It is held while an offer is open, for 10 minutes counted from the deadline:
+   accept and finish the retry in time to keep it, or decline (or let the offer lapse) and it goes to charity.
+   A missed retry is final. If the deadline passed while the app was closed, only what is left of the 10 minutes is offered. */
+const OFFER_MS = 10 * 60000;
+const fmtLen = ms => {
+  const m = Math.round(ms / 60000);
+  if (m >= 2880 && m % 1440 === 0) return `${m / 1440}d`;
+  const h = Math.floor(m / 60), r = m % 60;
+  return h ? (r ? `${h}h ${r}m` : `${h}h`) : `${r}m`;
+};
+const defaultRetryMs = t => Math.min(7 * 86400000, Math.max(15 * 60000, t.durationMs));         // same length as the original
+// "Same length", plus 1h, 4h and 24h, without duplicates, shortest first.
+const retryChoices = t => [...new Set([defaultRetryMs(t), 3600000, 4 * 3600000, 24 * 3600000])].sort((a, b) => a - b);
+
 function failTask(t) {
+  if ((t.attempt || 1) < 2) {
+    const expires = t.deadline + OFFER_MS;                           // the window starts at the deadline, not when the miss is noticed
+    if (Date.now() >= expires) { chargeMiss(t, false); return; }     // it ended while the app was closed
+    t.status = 'offer';
+    t.missedAt = t.deadline;
+    t.offerExpiresAt = expires;
+    t.offerChoiceMs = defaultRetryMs(t);
+    pushActivity('⏳', `Missed "${t.name}": one more try offered`, 'offer');
+    saveState();
+    flash('try');
+    toast('Missed. One more try?', 'try');
+    return;
+  }
+  chargeMiss(t, true);
+}
+
+// The stake goes to the chosen charity. `retried` marks a miss that happened on the second attempt.
+function chargeMiss(t, retried) {
   const c = selectedCharity();
   const charged = Math.min(t.penalty, Math.max(0, state.balance));
   state.balance -= charged;
@@ -523,17 +561,19 @@ function failTask(t) {
   t.failedAt = Date.now();
   t.charged = charged;
   t.charityId = c.id;
+  t.retryMissed = !!retried;
+  delete t.offerExpiresAt; delete t.offerChoiceMs;
   pushActivity('💸', `Missed "${t.name}" — ${fmtMoney(charged)} sent to ${c.name}`, 'penalty');
   saveState();
-  flash();
-  toast(`Missed "${t.name}". ${fmtMoney(charged)} to ${c.name}`, 'warn');
+  if (retried) flash();
+  toast(retried ? `Missed again. ${fmtMoney(charged)} to ${c.name}` : `Missed "${t.name}". ${fmtMoney(charged)} to ${c.name}`, 'warn');
   if (state.balance <= 0) setTimeout(() => toast('Balance is empty', 'error'), 400);
 }
 
 // Clears a task the person is truly blocked on: one ticket is spent, the stake is never charged.
 function bailOut(id) {
   const t = taskById(id);
-  if (!t || t.status !== 'active') return;
+  if (!t || t.status !== 'active' || (t.attempt || 1) === 2) return;   // no bailing out of a retry
   if (state.tickets < 1) {
     toast('No tickets left. Get one in the Shop', 'error');
     showView('shop');
@@ -575,9 +615,64 @@ function buyTickets(n) {
   toast(`${n} ticket${n > 1 ? 's' : ''} added`, 'success');
 }
 
+function acceptOffer(id) {
+  const t = taskById(id);
+  if (!t || t.status !== 'offer') return;
+  const ms = t.offerChoiceMs || defaultRetryMs(t), now = Date.now();
+  t.status = 'active';
+  t.attempt = 2;
+  t.createdAt = now;
+  t.durationMs = ms;
+  t.deadline = now + ms;
+  t.byDate = false;
+  delete t.offerExpiresAt; delete t.offerChoiceMs;
+  pushActivity('🎲', `One more try on "${t.name}"`, 'offer');
+  saveState();
+  renderAll();
+  toast(`One more try. Finish by ${fmtDeadline(t.deadline)}`, 'success');
+}
+
+function declineOffer(id) {
+  const t = taskById(id);
+  if (!t || t.status !== 'offer') return;
+  chargeMiss(t, false);
+  renderAll();
+}
+
+// While an offer is open, every screen but Today shows a banner with its countdown. Tapping it goes to the offer.
+function renderOfferBanner() {
+  const banner = $('#offer-banner');
+  if (!banner) return;
+  const offers = state.tasks.filter(t => t.status === 'offer').sort((a, b) => a.offerExpiresAt - b.offerExpiresAt);
+  document.title = offers.length ? 'One more try? Commit' : 'Commit — Stay Accountable';       // visible on the browser tab too
+  const show = offers.length > 0 && document.body.dataset.view !== 'home';
+  banner.classList.toggle('hidden', !show);
+  if (!offers.length) return;
+  const t = offers[0];
+  $('#ob-name').textContent = offers.length > 1 ? `${offers.length} tasks` : t.name;
+  const timer = $('#ob-timer');
+  timer.dataset.offerTimer = t.id;
+  timer.textContent = fmtCountdown(Math.max(0, t.offerExpiresAt - Date.now()));
+}
+
+function offerCardHTML(t) {
+  const remaining = Math.max(0, t.offerExpiresAt - Date.now());
+  const chips = retryChoices(t).map(ms => `<button type="button" class="chip${ms === t.offerChoiceMs ? ' active' : ''}" role="radio" aria-checked="${ms === t.offerChoiceMs}" data-offer-pick="${t.id}" data-ms="${ms}">${fmtLen(ms)}</button>`).join('');
+  return `<article class="offer-card" data-offer-id="${t.id}">
+    <div class="offer-head">
+      <div><h3><svg class="ico" aria-hidden="true"><use href="#i-retry"/></svg>One more try?</h3><p class="sub">${esc(t.name)}, ${fmtMoney(t.penalty)}</p></div>
+      <span class="offer-timer num" data-offer-timer="${t.id}" aria-label="Offer ends in">${fmtCountdown(remaining)}</span>
+    </div>
+    <p class="offer-line">Finish it in time to keep your ${fmtMoney(t.penalty)}. Miss again and it goes to charity.</p>
+    <div class="chip-row" role="radiogroup" aria-label="Time to finish">${chips}</div>
+    <div class="offer-actions"><button class="btn primary" data-offer-accept="${t.id}">Accept</button><button class="btn ghost" data-offer-decline="${t.id}">Let it go</button></div>
+  </article>`;
+}
+
 function completeTask(t, proof) {
   t.status = 'completed';
   t.completedAt = Date.now();
+  if ((t.attempt || 1) === 2) t.wonBack = true;                   // the retry succeeded, so the held stake comes back
   if (proof) t.proof = proof;
   pushActivity('✅', `Completed "${t.name}"${proof ? ` · verified ${proof.ai.confidence}% confidence` : ''}`, 'completed');
   saveState();
@@ -588,6 +683,7 @@ function completeTask(t, proof) {
 /* ---------- completion celebration ---------- */
 function celebrate(t, proof) {
   const stake = fmtMoney(t.penalty);
+  $('#done-title').textContent = t.wonBack ? 'Won back' : 'Done';
   $('#done-stake').textContent = `${stake} kept`;
   $('#overlay-done').classList.remove('hidden');
   document.body.classList.add('no-scroll');
@@ -601,15 +697,6 @@ function closeCelebration() {
   showView('home');
 }
 
-function deleteTask(id) {
-  const t = taskById(id);
-  if (!t || t.status !== 'active') return;
-  state.tasks = state.tasks.filter(x => x.id !== id);
-  saveState();
-  renderHome();
-  toast('Removed', 'info');
-}
-
 /* ---------- live timers ---------- */
 let tickTimer = null;
 function startTick() { if (tickTimer) clearInterval(tickTimer); tickTimer = setInterval(tick, 1000); }
@@ -617,7 +704,11 @@ function startTick() { if (tickTimer) clearInterval(tickTimer); tickTimer = setI
 function tick() {
   if (!currentUser) return;   // timers only run (and expire) for a signed-in user
   let expired = false;
-  state.tasks.forEach(t => { if (t.status === 'active' && Date.now() >= t.deadline) { failTask(t); expired = true; } });
+  state.tasks.forEach(t => {
+    if (t.status === 'active' && Date.now() >= t.deadline) { failTask(t); expired = true; }
+    else if (t.status === 'offer' && Date.now() >= t.offerExpiresAt) { chargeMiss(t, false); expired = true; }   // the offer lapsed
+  });
+  $$('[data-offer-timer]').forEach(el => { const t = taskById(el.dataset.offerTimer); if (t && t.status === 'offer') el.textContent = fmtCountdown(Math.max(0, t.offerExpiresAt - Date.now())); });
 
   $$('.task-card[data-task-id]').forEach(card => {
     const t = taskById(card.dataset.taskId);
@@ -1308,12 +1399,23 @@ function bindEvents() {
 
   // home list: complete / delete / report + charity select (delegated)
   document.addEventListener('click', e => {
+    if (e.target.closest('#offer-banner')) { showView('home'); return; }
+    const pk = e.target.closest('[data-offer-pick]');
+    if (pk) {
+      const t = taskById(pk.dataset.offerPick);
+      if (t) {
+        t.offerChoiceMs = +pk.dataset.ms; saveState();
+        $$(`[data-offer-pick="${t.id}"]`).forEach(c => { const on = c === pk; c.classList.toggle('active', on); c.setAttribute('aria-checked', on); });
+      }
+      return;
+    }
+    const ac = e.target.closest('[data-offer-accept]'); if (ac) return acceptOffer(ac.dataset.offerAccept);
+    const dc = e.target.closest('[data-offer-decline]'); if (dc) return declineOffer(dc.dataset.offerDecline);
     const hp = e.target.closest('[data-help]');
     if (hp) { const t = taskById(hp.dataset.help); if (t) openHelp({ name: t.name }, t.byDate ? undefined : Math.round(t.durationMs / 60000)); return; }
     const c = e.target.closest('[data-complete]'); if (c) return handleComplete(c);
     const bl = e.target.closest('[data-bail]'); if (bl) return twoStep(bl, () => bailOut(bl.dataset.bail));
     const by = e.target.closest('[data-buy]'); if (by) return twoStep(by, () => buyTickets(+by.dataset.buy));
-    const d = e.target.closest('[data-delete]'); if (d) return deleteTask(d.dataset.delete);
     const r = e.target.closest('[data-report]'); if (r) openReport(r.dataset.report);
     const s = e.target.closest('[data-select]'); if (s) selectCharity(s.dataset.select);
   });

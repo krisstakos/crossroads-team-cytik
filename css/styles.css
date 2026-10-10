@@ -11,6 +11,7 @@
   --ok:#047857; --ok-soft:#e8f6ef; --ok-line:#a7dcc4;
   --warn:#a85a00; --warn-soft:#fff3df; --warn-line:#f2cf95;
   --danger:#c9241a; --danger-soft:#fdeceb; --danger-line:#f3b5b0;
+  --try:#d42a0a; --try-ink:#ffffff; --try-soft:#fff1ed; --try-line:#ffb09c; --try-glow:rgba(212,42,10,.6);
   --shadow-sm:0 1px 2px rgba(18,24,21,.05),0 1px 3px rgba(18,24,21,.06);
   --shadow-md:0 4px 12px rgba(18,24,21,.08),0 2px 4px rgba(18,24,21,.04);
   --shadow-lg:0 24px 48px -12px rgba(18,24,21,.25);
@@ -30,6 +31,7 @@
     --ok:#1ef0a6; --ok-soft:rgba(30,240,166,.12); --ok-line:rgba(30,240,166,.4);
     --warn:#ffc233; --warn-soft:rgba(255,194,51,.12); --warn-line:rgba(255,194,51,.4);
     --danger:#ff5a67; --danger-soft:rgba(255,90,103,.12); --danger-line:rgba(255,90,103,.4);
+    --try:#ff5a3c; --try-ink:#2a0a04; --try-soft:rgba(255,90,60,.13); --try-line:rgba(255,90,60,.42); --try-glow:rgba(255,90,60,.7);
     --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 4px 14px rgba(0,0,0,.4); --shadow-lg:0 24px 48px -12px rgba(0,0,0,.6);
     --scrim:rgba(0,0,0,.62);
   }
@@ -44,6 +46,7 @@
   --ok:#1ef0a6; --ok-soft:rgba(30,240,166,.12); --ok-line:rgba(30,240,166,.4);
   --warn:#ffc233; --warn-soft:rgba(255,194,51,.12); --warn-line:rgba(255,194,51,.4);
   --danger:#ff5a67; --danger-soft:rgba(255,90,103,.12); --danger-line:rgba(255,90,103,.4);
+  --try:#ff5a3c; --try-ink:#2a0a04; --try-soft:rgba(255,90,60,.13); --try-line:rgba(255,90,60,.42); --try-glow:rgba(255,90,60,.7);
   --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow-md:0 4px 14px rgba(0,0,0,.4); --shadow-lg:0 24px 48px -12px rgba(0,0,0,.6);
   --scrim:rgba(0,0,0,.62);
 }
@@ -241,6 +244,47 @@ body:not([data-view="home"]) .fab{display:none}
 .empty-title{font-size:20px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px}
 .empty .sub{max-width:52ch}
 .empty .btn{margin-top:16px}
+
+/* ---------- one more try ---------- */
+/* a quiet tint and one accent colour, so it is noticed without shouting */
+.offers{display:grid;gap:12px;margin-bottom:14px}
+.offers:empty{display:none}
+.offer-card{padding:16px 18px;border-radius:var(--r);background:var(--try-soft);border:1px solid var(--try-line);border-left:4px solid var(--try);display:grid;gap:12px;animation:rise .2s var(--ease) backwards,pulse 1.4s ease-out .3s infinite}
+.offer-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;transform-origin:left center;animation:throb 1.4s ease-in-out .3s infinite}   /* only the header throbs, so the buttons stay still to tap */
+.offer-head h3{font-size:17px;color:var(--try);display:flex;align-items:center;gap:8px}
+.offer-head h3 .ico{width:20px;height:20px;stroke-width:2.2;flex-shrink:0}
+.offer-timer{font-size:26px;line-height:1;font-weight:700;letter-spacing:-.03em;color:var(--try);font-variant-numeric:tabular-nums;animation:beat 1.4s ease-in-out infinite}
+.offer-line{font-size:14px;line-height:1.45}
+.offer-card .chip{background:var(--surface)}
+.offer-card .chip.active{border-color:var(--try);color:var(--try);font-weight:600}
+.offer-actions{display:grid;grid-template-columns:1.4fr 1fr;gap:8px}
+.offer-card .btn.primary{background:var(--try);color:var(--try-ink)}
+.offer-card .btn.primary:hover{background:var(--try);filter:brightness(1.08)}
+.offer-card :focus-visible{outline-color:var(--try)}
+
+/* the running retry is red throughout: ring, progress, stake, button and tag. No amber, even when time runs short */
+.task-card.retry{border-color:var(--try-line)}
+.task-card.retry,.task-card.retry.urgent{--ring:var(--try)}
+.task-card.retry.urgent .countdown{color:var(--try)}
+.task-card.retry .chip.stake:not(.retry){background:var(--try-soft);border-color:var(--try-line);color:var(--try)}
+.task-card.retry .btn.primary{background:var(--try);color:var(--try-ink)}
+.task-card.retry .btn.primary:hover{background:var(--try);filter:brightness(1.08)}
+.task-card.retry :focus-visible{outline-color:var(--try)}
+.chip.stake.retry{background:var(--try-soft);border-color:var(--try-line);color:var(--try);font-weight:600;animation:beat 1.4s ease-in-out infinite}
+/* the card keeps its entrance, then pulses (this selector is more specific than the list entrance on purpose) */
+.view:not(.hidden) .task-card.retry{animation:rise .2s var(--ease) calc(var(--i,0)*25ms) backwards,pulse 1.4s ease-out .4s infinite}
+.task-card.retry .countdown{animation:beat 1.4s ease-in-out infinite}
+
+/* a slim strip on the other screens while an offer is open */
+.offer-banner{display:flex;align-items:center;gap:10px;width:100%;padding:9px 14px;margin:0 0 12px;border-radius:10px;background:var(--try-soft);border:1px solid var(--try-line);color:var(--try);text-align:left;animation:pulse 1.4s ease-out infinite}
+.offer-banner .ob-ico{width:20px;height:20px;stroke-width:2.2;flex-shrink:0}
+.offer-banner .ob-text{flex:1;min-width:0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.offer-banner b{font-weight:600}
+.offer-banner .num{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}
+.offer-banner .ob-go{font-weight:600;font-size:13px;padding:4px 10px;border-radius:8px;border:1px solid var(--try-line);background:var(--surface)}
+.offer-banner:focus-visible{outline-color:var(--try);outline-offset:-3px}
+[data-badge].offer{background:var(--try);color:var(--try-ink);animation:pulse 1.4s ease-out infinite}
+.toast.try{border-left-color:var(--try)}
 
 /* ---------- recommended tasks ---------- */
 .reco-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
@@ -716,6 +760,7 @@ body:not([data-view="home"]) .fab{display:none}
 .charity-card.selected{animation:pop .15s var(--ease)}
 .fab{animation:rise .2s var(--ease) .2s both}
 .flash{position:fixed;inset:0;z-index:250;pointer-events:none;background:radial-gradient(circle,transparent 40%,var(--danger));animation:flash .3s ease-out forwards}
+.flash.try{background:radial-gradient(circle,transparent 40%,var(--try))}
 
 @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @keyframes fade{from{opacity:0}to{opacity:1}}
@@ -732,10 +777,17 @@ body:not([data-view="home"]) .fab{display:none}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
 @keyframes dot{0%,60%,100%{opacity:.35}30%{opacity:1}}
 @keyframes scan{from{transform:translateY(-110%)}to{transform:translateY(340%)}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 var(--try-glow)}70%,100%{box-shadow:0 0 0 16px transparent}}
+@keyframes throb{0%,100%{transform:scale(1)}50%{transform:scale(1.025)}}
+@keyframes beat{0%,100%{opacity:1}50%{opacity:.5}}
+@keyframes glow{0%,100%{box-shadow:0 0 0 2px var(--try-glow)}50%{box-shadow:0 0 0 7px var(--try-glow)}}
 @keyframes flash{0%{opacity:.25}100%{opacity:0}}
 
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-delay:0ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+  /* the offer is time-critical, so it keeps a slow glow and fade. Nothing moves or changes size. */
+  .offer-card,.offer-banner,[data-badge].offer,.view:not(.hidden) .task-card.retry{animation-name:glow!important;animation-duration:2.2s!important;animation-delay:0s!important;animation-iteration-count:infinite!important;animation-timing-function:ease-in-out!important}
+  .offer-timer,.task-card.retry .countdown,.chip.stake.retry{animation-duration:2.2s!important;animation-delay:0s!important;animation-iteration-count:infinite!important}
 }
 
 /* shop and bail-out tickets */
