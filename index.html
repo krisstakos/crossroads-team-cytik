@@ -3,28 +3,30 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-<meta name="theme-color" content="#0a0d14"/>
+<meta name="theme-color" content="#0a0e13"/>
 <title>Commit — Stay Accountable</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <!-- Non-blocking font load: falls back to system fonts if the CDN is slow/unreachable -->
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-<noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet"></noscript>
 <link rel="stylesheet" href="css/styles.css"/>
 </head>
 <body>
 
+<!-- Icon sprite -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-today" viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5"/><path d="M12 13V9M9.5 3h5"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></symbol>
+  <symbol id="i-charity" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2"/><circle cx="9" cy="16" r="2"/></symbol>
+</svg>
+
 <!-- ================= LOGIN ================= -->
 <div id="view-login" class="login-view">
-  <div class="login-bg"><div class="blob b1"></div><div class="blob b2"></div></div>
   <div class="login-card" id="login-card">
-    <div class="logo-row">
-      <div class="logo-mark">✓</div>
-      <div>
-        <h1>Commit</h1>
-        <p class="tagline">Miss your goal? Your money goes to charity.</p>
-      </div>
-    </div>
+    <h1 class="wordmark">Commit</h1>
+    <p class="tagline">Miss your goal and your money goes to charity.</p>
     <form id="login-form" novalidate>
       <label class="field">
         <span>Username</span>
@@ -33,14 +35,14 @@
       <label class="field">
         <span>Password</span>
         <div class="pass-wrap">
-          <input id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password" required/>
-          <button type="button" id="btn-toggle-pass" class="eye-btn" aria-label="Show password">👁</button>
+          <input id="login-pass" type="password" placeholder="Password" autocomplete="current-password" required/>
+          <button type="button" id="btn-toggle-pass" class="show-btn" aria-label="Show password">Show</button>
         </div>
       </label>
       <p id="login-error" class="form-error hidden"></p>
       <button type="submit" class="btn primary block">Sign in</button>
     </form>
-    <button id="demo-fill" class="link-btn center">Use demo account (demo / demo123)</button>
+    <button id="demo-fill" class="link-btn">Use demo account (demo / demo123)</button>
   </div>
 </div>
 
@@ -49,14 +51,12 @@
 
   <!-- Desktop sidebar -->
   <aside class="sidebar">
-    <div class="logo-row side">
-      <div class="logo-mark sm">✓</div>
-      <h2>Commit</h2>
-    </div>
-    <nav class="side-nav">
-      <button class="nav-item active" data-view="home"><span class="ni-icon">🏠</span> Home</button>
-      <button class="nav-item" data-view="charities"><span class="ni-icon">💝</span> Charities</button>
-      <button class="nav-item" data-view="settings"><span class="ni-icon">⚙️</span> Settings</button>
+    <h2 class="wordmark side">Commit</h2>
+    <nav class="side-nav" aria-label="Main">
+      <button class="nav-item active" data-view="home"><svg class="ico"><use href="#i-today"/></svg>Today</button>
+      <button class="nav-item" data-view="record"><svg class="ico"><use href="#i-history"/></svg>History</button>
+      <button class="nav-item" data-view="charities"><svg class="ico"><use href="#i-charity"/></svg>Charity</button>
+      <button class="nav-item" data-view="settings"><svg class="ico"><use href="#i-settings"/></svg>Settings</button>
     </nav>
     <div class="side-footer">
       <div class="user-chip">
@@ -70,49 +70,66 @@
   <main class="main">
     <!-- Mobile top bar -->
     <header class="topbar">
-      <div class="logo-row mini"><div class="logo-mark xs">✓</div><span class="brand">Commit</span></div>
-      <button id="topbar-balance" class="balance-pill">$0.00</button>
+      <span class="wordmark mini">Commit</span>
+      <button id="topbar-balance" class="balance-pill" data-view="record" aria-label="Balance. Open history">$0.00</button>
     </header>
 
-    <!-- ============ HOME ============ -->
+    <!-- ============ TODAY ============ -->
     <section id="view-home" class="view">
       <div class="page-head">
         <div>
-          <h1 id="greeting">Good morning 👋</h1>
+          <h1>Today</h1>
           <p class="sub" id="greet-date"></p>
         </div>
-        <button id="btn-add-task-desktop" class="btn primary desktop-only">+ New task</button>
+        <button id="btn-add-task-desktop" class="btn primary desktop-only">New task</button>
       </div>
 
-      <div class="hero card">
-        <div class="hero-left">
-          <p class="hero-label">Account balance</p>
-          <p class="hero-balance" id="hero-balance">$0.00</p>
-          <p class="hero-sub">Linked account •••• 4821 · mock</p>
+      <div id="tasks-active-list" class="timer-list"></div>
+      <div id="no-tasks" class="empty hidden">
+        <p class="empty-title">Nothing on the clock</p>
+        <p class="sub">Name a task, set a deadline and put money on it. Prove it with a photo before time runs out, or the stake goes to your charity.</p>
+        <button id="btn-add-task-empty" class="btn primary">Start a task</button>
+      </div>
+
+      <h2 class="section-title" id="reco-title">Recommended for you</h2>
+      <div id="recommended" class="reco-grid"></div>
+    </section>
+
+    <!-- ============ HISTORY ============ -->
+    <section id="view-record" class="view hidden">
+      <div class="page-head">
+        <div>
+          <h1>History</h1>
+          <p class="sub">Your balance, results and recent activity.</p>
         </div>
-        <button id="btn-add-funds-hero" class="btn ghost">+ Add funds</button>
       </div>
 
-      <div class="stats-row">
-        <div class="stat card"><span class="stat-num" id="stat-active">0</span><span class="stat-label">Active tasks</span></div>
-        <div class="stat card"><span class="stat-num" id="stat-completed">0</span><span class="stat-label">Completed</span></div>
-        <div class="stat card"><span class="stat-num" id="stat-sent">$0</span><span class="stat-label">Sent to charity</span></div>
+      <div class="record-top">
+        <div class="ledger">
+          <div>
+            <p class="sub">Balance</p>
+            <p class="ledger-balance" id="hero-balance">$0.00</p>
+            <p class="sub">Linked account ending 4821 (mock)</p>
+          </div>
+          <button id="btn-add-funds-hero" class="btn ghost">Add funds</button>
+        </div>
+        <dl class="figures">
+          <div><dt>Completed</dt><dd id="stat-completed">0</dd></div>
+          <div><dt>Missed</dt><dd id="stat-missed">0</dd></div>
+          <div><dt>Sent to charity</dt><dd id="stat-sent">$0</dd></div>
+        </dl>
       </div>
 
-      <div class="info-banner card hidden" id="how-it-works">
-        <p><b>How it works:</b> 1️⃣ Set a task &amp; stake → 2️⃣ beat the timer with photo proof (AI verifies) → 3️⃣ miss it and your money goes to charity.</p>
-        <button id="hiw-dismiss" class="icon-btn sm" aria-label="Dismiss">✕</button>
+      <div class="record-cols">
+        <div>
+          <h2 class="section-title">Results</h2>
+          <div id="tasks-history-list" class="plain-list"></div>
+        </div>
+        <div>
+          <h2 class="section-title">Activity</h2>
+          <div id="activity-list" class="plain-list"></div>
+        </div>
       </div>
-
-      <h2 class="section-title">Active tasks <span class="count-badge" id="active-count">0</span></h2>
-      <div id="tasks-active-list" class="task-grid"></div>
-      <p id="no-tasks" class="empty hidden">No active tasks. Add one and start the clock ⏱️</p>
-
-      <h2 class="section-title">History</h2>
-      <div id="tasks-history-list" class="history-card card"></div>
-
-      <h2 class="section-title">Recent activity</h2>
-      <div id="activity-list" class="card activity-card"></div>
     </section>
 
     <!-- ============ CHARITIES ============ -->
@@ -120,7 +137,7 @@
       <div class="page-head">
         <div>
           <h1>Your charity</h1>
-          <p class="sub">When you miss a task, your stake is sent here. Pick who benefits from your discipline.</p>
+          <p class="sub">When you miss a task, your stake is sent here. Pick who benefits.</p>
         </div>
       </div>
       <div id="charities-list" class="charity-grid"></div>
@@ -129,16 +146,16 @@
     <!-- ============ SETTINGS ============ -->
     <section id="view-settings" class="view hidden">
       <div class="page-head">
-        <div><h1>Settings</h1><p class="sub">Account, payments &amp; preferences.</p></div>
+        <div><h1>Settings</h1><p class="sub">Account, payments and preferences.</p></div>
       </div>
 
       <div class="settings-stack">
         <div class="card settings-card">
           <h3>Profile</h3>
-          <div class="row-between" style="margin-top:14px">
+          <div class="row-between gap-top">
             <div class="user-chip">
               <div class="avatar" id="set-avatar">A</div>
-              <div><p id="settings-username" class="u-name">alex</p><p class="u-sub">Mock account · no backend</p></div>
+              <div><p id="settings-username" class="u-name">alex</p><p class="u-sub">Mock account, no backend</p></div>
             </div>
             <button id="btn-logout2" class="btn ghost sm danger-text">Sign out</button>
           </div>
@@ -146,51 +163,53 @@
 
         <div class="card settings-card">
           <h3>Payment account</h3>
-          <p class="sub" style="margin-top:6px">Balance: <strong id="set-balance">$0.00</strong> · Total sent to charity: <strong id="set-sent">$0</strong></p>
-          <p class="label" style="margin-top:18px">Add funds (mock)</p>
+          <p class="sub">Balance <strong id="set-balance">$0.00</strong>. Total sent to charity <strong id="set-sent">$0</strong>.</p>
+          <p class="label gap-top">Add funds (mock)</p>
           <div class="chip-row" id="funds-chips">
             <button class="chip" data-amount="25">+$25</button>
             <button class="chip" data-amount="50">+$50</button>
             <button class="chip" data-amount="100">+$100</button>
           </div>
           <div class="inline-form">
-            <input id="custom-funds" type="number" min="1" placeholder="Custom amount"/>
+            <input id="custom-funds" type="number" min="1" placeholder="Custom amount" aria-label="Custom amount"/>
             <button id="btn-add-custom" class="btn primary sm">Add</button>
           </div>
         </div>
 
         <div class="card settings-card">
           <h3>Default stake</h3>
-          <p class="sub" style="margin-top:6px">Pre-filled when you create a new task.</p>
-          <div class="inline-form" style="margin-top:14px">
+          <p class="sub">Pre-filled when you create a new task.</p>
+          <div class="inline-form">
             <span class="dollar-sign">$</span>
-            <input id="default-penalty" type="number" min="1" value="10"/>
+            <input id="default-penalty" type="number" min="1" value="10" aria-label="Default stake"/>
             <button id="btn-save-default" class="btn primary sm">Save</button>
           </div>
         </div>
 
         <div class="card settings-card danger-zone">
           <h3>Danger zone</h3>
-          <p class="sub" style="margin-top:6px">Reset all demo data (tasks, balance, history).</p>
-          <button id="btn-reset" class="btn ghost sm danger-text" style="margin-top:14px">Reset demo data</button>
+          <p class="sub">Reset all demo data: tasks, balance and history.</p>
+          <button id="btn-reset" class="btn ghost sm danger-text gap-top">Reset demo data</button>
         </div>
       </div>
     </section>
 
   <!-- Mobile bottom nav -->
-  <nav class="bottom-nav">
-    <button class="bn-item active" data-view="home"><span>🏠</span><small>Home</small></button>
-    <button class="bn-item" data-view="charities"><span>💝</span><small>Charity</small></button>
-    <button class="bn-item" data-view="settings"><span>⚙️</span><small>Settings</small></button>
+  <nav class="bottom-nav" aria-label="Main">
+    <button class="bn-item active" data-view="home"><svg class="ico"><use href="#i-today"/></svg><small>Today</small></button>
+    <button class="bn-item" data-view="record"><svg class="ico"><use href="#i-history"/></svg><small>History</small></button>
+    <button class="bn-item" data-view="charities"><svg class="ico"><use href="#i-charity"/></svg><small>Charity</small></button>
+    <button class="bn-item" data-view="settings"><svg class="ico"><use href="#i-settings"/></svg><small>Settings</small></button>
   </nav>
-  <button id="fab-add" class="fab" aria-label="Add task">+</button>
+  <button id="fab-add" class="fab" aria-label="New task">New task</button>
+  </main>
 </div>
 
 <!-- ================= ADD TASK OVERLAY ================= -->
-<div id="overlay-add" class="overlay hidden">
+<div id="overlay-add" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="add-title">
   <div class="sheet card">
-    <h3>New task</h3>
-    <p class="sub" style="margin:4px 0 18px">Set a deadline and put money on the line.</p>
+    <h3 id="add-title">New task</h3>
+    <p class="sub sheet-sub">Set a deadline and put money on the line.</p>
     <form id="add-task-form">
       <label class="field"><span>Task name</span><input id="at-name" type="text" placeholder="e.g. Go to the gym" maxlength="40"/></label>
       <div class="field"><span>Icon</span><div id="at-icon-picker" class="icon-row"></div></div>
@@ -205,11 +224,11 @@
         <button type="button" class="chip" data-h="4" data-m="0">4h</button>
         <button type="button" class="chip" data-h="8" data-m="0">8h</button>
       </div>
-      <label class="field" style="margin-top:16px"><span>Your stake ($)</span><input id="at-penalty" type="number" min="1" value="10"/></label>
+      <label class="field gap-top"><span>Your stake ($)</span><input id="at-penalty" type="number" min="1" value="10"/></label>
       <p class="hint">If the timer hits zero, this amount is sent to your charity.</p>
       <div class="sheet-actions">
         <button type="button" class="btn ghost" id="btn-cancel-add">Cancel</button>
-        <button type="submit" class="btn primary">Start timer ⏱️</button>
+        <button type="submit" class="btn primary">Start timer</button>
       </div>
     </form>
   </div>
@@ -225,7 +244,7 @@
       <span id="pf-task-name" class="pf-title"></span>
     </div>
     <div id="pf-camera-error" class="pf-error hidden">
-      <p>📷 Camera unavailable.<br/>Use a photo from your library instead.</p>
+      <p>Camera unavailable.<br/>Use a photo from your library instead.</p>
       <label class="btn primary sm">Choose photo<input id="pf-file-fallback" type="file" accept="image/*" hidden/></label>
     </div>
     <div class="pf-bottom">
@@ -254,25 +273,38 @@
     </div>
     <div class="pf-actions">
       <button id="btn-pf-retake" class="btn ghost hidden">Retake photo</button>
-      <button id="btn-pf-done" class="btn primary block hidden">Confirm &amp; complete ✓</button>
+      <button id="btn-pf-done" class="btn primary block hidden">Confirm and complete</button>
     </div>
   </div>
 </div>
 
+<!-- ================= TASK COMPLETE CELEBRATION ================= -->
+<div id="overlay-done" class="done-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="done-title">
+  <div class="done-card">
+    <div class="done-ring" aria-hidden="true">
+      <svg viewBox="0 0 120 120"><circle class="arc" cx="60" cy="60" r="54" pathLength="100"/></svg>
+      <svg viewBox="0 0 120 120"><path class="tick" d="M38 62 L54 78 L84 44" pathLength="100"/></svg>
+    </div>
+    <h2 id="done-title" class="done-title">Task complete</h2>
+    <p id="done-sub" class="done-sub"></p>
+    <p id="done-stake" class="done-stake"></p>
+    <button id="btn-done-close" class="btn primary">Continue</button>
+  </div>
+</div>
+
 <!-- ================= PHONE PROMPT (desktop: complete on phone) ================= -->
-<div id="overlay-phone" class="overlay hidden">
+<div id="overlay-phone" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="phone-title">
   <div class="sheet card phone-sheet">
-    <div class="phone-icon">📱</div>
-    <h3>Complete this on your phone</h3>
-    <p class="sub">Tasks can only be completed with camera proof. Open Commit on your mobile device and tap "Complete 📷" there — the timer keeps running.</p>
+    <h3 id="phone-title">Complete this on your phone</h3>
+    <p class="sub">Tasks can only be completed with camera proof. Open Commit on your phone and tap "Complete with photo". The timer keeps running.</p>
     <button id="btn-phone-ok" class="btn primary block">Got it</button>
   </div>
 </div>
 
 <!-- ================= AI REPORT MODAL ================= -->
-<div id="overlay-report" class="overlay hidden">
+<div id="overlay-report" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="report-title">
   <div class="sheet card report-sheet">
-    <div class="row-between"><h3>AI verification report</h3><button id="btn-close-report" class="icon-btn" aria-label="Close">✕</button></div>
+    <div class="row-between"><h3 id="report-title">AI verification report</h3><button id="btn-close-report" class="icon-btn" aria-label="Close">✕</button></div>
     <img id="report-image" alt="Proof of completion"/>
     <p class="report-task" id="report-task-name"></p>
     <div class="report-grid">
@@ -281,18 +313,15 @@
       <div><span>Captured at</span><b id="report-time"></b></div>
       <div><span>Model</span><b>ProofNet v2 (mock)</b></div>
     </div>
-    <p class="label" style="margin-top:16px">Detected elements</p>
+    <p class="label gap-top">Detected elements</p>
     <div id="report-detected" class="chip-row wrap"></div>
     <p class="hint" id="report-note"></p>
   </div>
 </div>
 
-<div id="toast-container"></div>
+<div id="toast-container" role="status" aria-live="polite"></div>
 
 <script src="js/mock-data.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
-
-
-
