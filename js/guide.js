@@ -82,7 +82,19 @@ const GUIDE = (function () {
     }
   };
 
-  const STEPS = [AREA, BLOCKER, WHEN, TIME, STAKE];
+  // Asked in the chat instead of the setup questions: the profile already answers those.
+  const ENERGY = {
+    id: 'energy', title: 'Energy',
+    q: 'How is your energy right now?',
+    options: [
+      { id: 'high', label: 'Good',  keys: ['good', 'great', 'energ', 'high', 'fine'] },
+      { id: 'ok',   label: 'Okay',  keys: ['ok', 'okay', 'normal', 'average', 'meh'] },
+      { id: 'low',  label: 'Low',   keys: ['low', 'tired', 'drained', 'exhaust', 'sleepy'] }
+    ]
+  };
+  const AREA_OTHER = { id: 'other', label: 'Something else', keys: ['else', 'other', 'different', 'new'] };
+
+  const STEPS = [AREA, BLOCKER, WHEN, TIME, STAKE];     // the full set; the chat asks only what it does not know yet
 
   /* ---------- the task catalogue, by area ---------- */
   // mins: natural length. diff: 1 easy to 3 hard. when: times of day it suits best.
@@ -133,14 +145,17 @@ const GUIDE = (function () {
     const blockers = a.blockers || (a.blocker ? [a.blocker.id] : []);
     const whens = a.whens || (a.when ? [a.when.id] : []);
     const baseCap = a.time ? a.time.cap : Infinity;
-    const cap = Math.min(baseCap, blockers.includes('busy') ? 30 : Infinity);
+    const cap = Math.min(baseCap, blockers.includes('busy') ? 30 : Infinity, a.energy && a.energy.id === 'low' ? 45 : Infinity);
     const targets = blockers.map(id => BLOCKER.target[id]);
-    const target = targets.length ? targets.reduce((x, y) => x + y, 0) / targets.length : 2;      // several blockers: aim for the middle
+    const base = targets.length ? targets.reduce((x, y) => x + y, 0) / targets.length : 2;      // several blockers: aim for the middle
+    const shift = { high: 0.7, ok: 0, low: -0.7 }[a.energy && a.energy.id] || 0;                // good energy can take a harder task
+    const target = base + shift;
     const anyTime = !whens.length || whens.includes('varies');
     const roundTo = m => (m <= 15 ? 15 : m <= 30 ? 30 : m <= 45 ? 45 : m <= 60 ? 60 : m <= 90 ? 90 : 120);
     const stake = Math.max(MIN_STAKE, a.stake.id);
     const fitOpt = BLOCKER.options.find(o => o.id === blockers[0]);
-    const pool = (CATALOGUE[a.area.id] || []).filter(t => t.mins <= cap * 2);
+    const skip = new Set((a.exclude || []).map(n => n.toLowerCase()));                           // already running, so do not suggest it again
+    const pool = (CATALOGUE[a.area.id] || []).filter(t => t.mins <= cap * 2 && !skip.has(t.name.toLowerCase()));
     return pool
       .map((t, i) => ({ t, i, score: -Math.abs(t.diff - target) + (anyTime || whens.some(w => t.when.includes(w)) ? 0.6 : 0) }))
       .sort((x, y) => y.score - x.score || x.i - y.i)
@@ -157,6 +172,8 @@ const GUIDE = (function () {
   let current = null;     // the step currently waiting for an answer
   let answers = {};
   let results = [];
+  let plan = STEPS;       // the questions for this run, built from what the profile already tells us
+  let ctx = {};           // what the suggestions were built from
 
   const el = id => document.getElementById(id);
   const log = () => el('guide-log');
@@ -187,8 +204,35 @@ const GUIDE = (function () {
     box.innerHTML = items.map((o, i) => `<button type="button" class="chip" style="--i:${i}" data-gi="${i}"${o.end ? ` data-end="${o.end}"` : ''}>${esc(o.label)}</button>`).join('');
   }
 
+  // Time of day, the profile and past tasks decide what is worth asking.
+  const nowWhen = () => { const h = new Date().getHours(); return h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening'; };
+  const profile = () => (typeof state !== 'undefined' && state && state.profile) || {};
+  const taskList = () => (typeof state !== 'undefined' && state && state.tasks) || [];
+  const stakeDefault = () => Math.max(MIN_STAKE, profile().stake || (typeof state !== 'undefined' && state && state.defaultPenalty) || MIN_STAKE);
+
+  function buildPlan() {
+    const p = profile();
+    const areaIds = p.areas || [];
+    const area = areaIds.length
+      ? { ...AREA, q: 'What is the focus today?', options: [...AREA.options.filter(o => areaIds.includes(o.id)), AREA_OTHER] }
+      : AREA;
+    const hour = new Date().getHours();
+    const time = { ...TIME, q: 'How long do you have?', options: TIME.options.filter(o => !(o.id === 'long' && hour >= 21)) };
+    const steps = [area, time, ENERGY];
+    if (!(p.blockers && p.blockers.length) && !p.blocker) steps.push(BLOCKER);            // a profile without setup answers still needs this one
+    if (!p.stake && !taskList().length) steps.push(STAKE);                                // first task ever: ask what to stake
+    return steps;
+  }
+
+  function greeting() {
+    const h = new Date().getHours();
+    const part = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+    const running = taskList().filter(t => t.status === 'active').length;
+    return running ? `${part}. ${running} task${running > 1 ? 's' : ''} running. Let's find one more.` : `${part}. Let's find your next task.`;
+  }
+
   function setProgress(ix) {
-    const total = STEPS.length;
+    const total = plan.length;
     el('guide-bar-fill').style.width = Math.round((ix / total) * 100) + '%';
     el('guide-progress').textContent = ix >= total ? 'Done' : `${ix + 1} of ${total}`;
   }
@@ -231,6 +275,10 @@ const GUIDE = (function () {
         busy = false;
         return ask(UNSURE, token);
       }
+      if (step.id === 'area' && opt.id === 'other') {                  // outside their usual areas: show every area
+        busy = false;
+        return ask({ ...AREA, q: 'Which area?', options: AREA.options }, token);
+      }
       if (step === UNSURE) {
         const area = AREA.options.find(o => o.id === opt.area);
         answers.area = area;
@@ -238,7 +286,7 @@ const GUIDE = (function () {
       }
 
       answers[step.id] = opt;
-      return next(STEPS.indexOf(step) + 1, token);
+      return next(plan.findIndex(x => x.id === step.id) + 1, token);
     } finally {
       if (token === run) busy = false;
     }
@@ -246,15 +294,18 @@ const GUIDE = (function () {
 
   async function next(ix, token) {
     setProgress(ix);
-    if (ix < STEPS.length) { busy = false; return ask(STEPS[ix], token); }
+    if (ix < plan.length) { busy = false; return ask(plan[ix], token); }
     return finish(token);
   }
 
   async function finish(token) {
-    const a = answers;
+    const p = profile();
+    const blockers = answers.blocker ? [answers.blocker.id] : (p.blockers || (p.blocker ? [p.blocker] : []));
+    const a = { ...answers, blockers, whens: [nowWhen()], stake: answers.stake || { id: stakeDefault() }, exclude: taskList().filter(t => t.status === 'active' || t.status === 'offer').map(t => t.name) };
     results = suggest(a);
     // practical help (nearest place, price, plan) for each suggestion, when we have it
-    const prefs = { when: a.when.id, blocker: a.blocker.id };
+    const prefs = { when: nowWhen(), blocker: blockers[0] };
+    ctx = prefs;
     await Promise.all(results.map(async r => {
       const mins = r.h * 60 + r.m;
       [r.help, r.where] = await Promise.all([ASSIST.load(r, mins, prefs), ASSIST.whereFor(r, mins, prefs)]);
@@ -277,7 +328,7 @@ const GUIDE = (function () {
     log().appendChild(wrap);
     scrollDown();
 
-    setProgress(STEPS.length);
+    setProgress(plan.length);
     current = null;
     setChips([{ label: 'Start over', end: 'restart' }, { label: 'Close', end: 'close' }]);
     el('guide-text').disabled = true; el('guide-send').disabled = true;
@@ -289,13 +340,13 @@ const GUIDE = (function () {
   async function begin() {
     run++;
     const token = run;
-    busy = false; current = null; answers = {}; results = [];
+    busy = false; current = null; answers = {}; results = []; plan = buildPlan();
     log().innerHTML = '';
     setChips([]);
     setProgress(0);
     enableInput(false);
-    if (!(await say("Hi! A few quick questions, then I'll suggest tasks.", token))) return;
-    ask(STEPS[0], token);
+    if (!(await say(greeting(), token))) return;
+    ask(plan[0], token);
   }
 
   function open() {
@@ -343,7 +394,7 @@ const GUIDE = (function () {
 
     log().addEventListener('click', e => {
       const h = e.target.closest('[data-guide-help]');
-      if (h) { const r = results[+h.dataset.guideHelp]; if (r) openHelp({ name: r.name }, r.h * 60 + r.m, { when: answers.when && answers.when.id, blocker: answers.blocker && answers.blocker.id }); return; }
+      if (h) { const r = results[+h.dataset.guideHelp]; if (r) openHelp({ name: r.name }, r.h * 60 + r.m, ctx); return; }
       const b = e.target.closest('[data-guide-start]');
       if (!b) return;
       const r = results[+b.dataset.guideStart];
@@ -358,5 +409,5 @@ const GUIDE = (function () {
   }
 
   document.addEventListener('DOMContentLoaded', bind);
-  return { open, close, suggest, matchOption, STEPS, AREA, BLOCKER, WHEN, TIME, STAKE, UNSURE };
+  return { open, close, suggest, matchOption, buildPlan, STEPS, AREA, BLOCKER, WHEN, TIME, STAKE, UNSURE, ENERGY };
 })();

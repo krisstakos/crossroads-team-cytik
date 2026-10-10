@@ -255,6 +255,7 @@ body:not([data-view="home"]) .fab{display:none}
 .offer-head h3 .ico{width:20px;height:20px;stroke-width:2.2;flex-shrink:0}
 .offer-timer{font-size:26px;line-height:1;font-weight:700;letter-spacing:-.03em;color:var(--try);font-variant-numeric:tabular-nums;animation:beat 1.4s ease-in-out infinite}
 .offer-line{font-size:14px;line-height:1.45}
+.offer-left{font-size:12.5px;font-weight:600;color:var(--try)}
 .offer-card .chip{background:var(--surface)}
 .offer-card .chip.active{border-color:var(--try);color:var(--try);font-weight:600}
 .offer-actions{display:grid;grid-template-columns:1.4fr 1fr;gap:8px}
@@ -545,8 +546,13 @@ body:not([data-view="home"]) .fab{display:none}
 /* ---------- task assistance and where-to-do-it ---------- */
 .card-actions{display:flex;gap:8px;align-items:stretch}
 .task-card .card-actions .complete-btn,.guide-sugg .card-actions .btn.primary{flex:1;width:auto}
-.help-btn{flex-shrink:0}
+.card-actions .btn{padding-left:14px;padding-right:14px;min-width:0}
+.help-btn,.bail-btn{flex-shrink:0;white-space:nowrap}
+.lead-body>*,.lead-info{min-width:0}
+.btn.armed{white-space:nowrap}
 .assist-panel{display:block;margin:-4px 0 14px}
+.refine{display:flex;flex-direction:column;gap:12px;margin:0 0 14px}
+.refine-q>span{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px}
 .assist-panel .link-btn{display:block;margin:6px 2px 0;font-size:13px}
 .where{display:flex;gap:10px;align-items:flex-start;padding:11px 12px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);text-align:left}
 .where .pin{width:20px;height:20px;margin-top:1px;color:var(--accent-text);stroke-width:2}
@@ -793,7 +799,8 @@ body:not([data-view="home"]) .fab{display:none}
 /* shop and bail-out tickets */
 .topbar-pills{display:flex;flex-direction:column;align-items:center;background:var(--surface-2);border:1px solid var(--line);border-radius:18px;padding:4px 14px 3px}
 .topbar-pills .balance-pill{background:none;border:0;padding:0;min-height:0;line-height:1.25;border-radius:0}
-.topbar-pills #topbar-tickets{font-size:11.5px;font-weight:500;color:var(--muted);align-self:flex-end}
+.topbar-extras{display:flex;gap:10px;align-self:flex-end}
+.topbar-pills #topbar-tickets,.topbar-pills #topbar-retries{font-size:11.5px;font-weight:500;color:var(--muted)}
 .shop-stack{display:flex;flex-direction:column;gap:16px;max-width:560px}
 .shop-balance{display:flex;justify-content:space-between;align-items:flex-end;padding:20px}
 .shop-wallet{text-align:right}
@@ -807,3 +814,7 @@ body:not([data-view="home"]) .fab{display:none}
 html.embedded,html.embedded *{scrollbar-width:none}
 html.embedded ::-webkit-scrollbar{display:none}
 html.embedded,html.embedded body{overflow-x:hidden}
+
+/* a bailed card folds away; the rest of the list stays where it is */
+#tasks-active-list.still .task-card:not(.retry){animation:none}
+.task-card.leaving{opacity:0;transform:scale(.97);transition:opacity .18s ease,transform .18s ease;pointer-events:none}

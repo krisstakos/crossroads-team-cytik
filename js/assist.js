@@ -26,7 +26,7 @@ const ASSIST = (function () {
     ['study', /\b(study|studying|read|reading|revis\w*|exam|homework|language|course|learn\w*)\b/i],
     ['cook',  /\b(cook\w*|dinner|lunch|breakfast|meal|recipe|bake|baking)\b/i],
     ['yoga',  /\b(yoga|stretch\w*|pilates|meditat\w*|wind-?down)\b/i],
-    ['work',  /\b(deep work|focus|admin|inbox|ship|project|plan tomorrow|code|coding|work block|my app)\b/i],
+    ['work',  /\b(deep work|focus|admin|inbox|ship|project|plan tomorrow|code|coding|work block|my app|report|taxes|tax|email|invoice|presentation|slides|proposal)\b/i],
     ['art',   /\b(sketch\w*|draw\w*|paint\w*|art|write|writing|instrument|guitar|piano|music)\b/i]
   ];
   // Tasks done at home need no venue, but "At home" is still a useful answer to "where".
@@ -334,5 +334,37 @@ const ASSIST = (function () {
       <details class="help-more"><summary>More</summary>${more}</details>`;
   }
 
-  return { kindOf, load, whereFor, whereHTML, fullHTML, setProvider };
+  /* ---------- follow-up questions for a custom task ---------- */
+  // Each kind asks about itself, so a run is asked how far and a meal what it is. `mins` sets the time limit;
+  // `add` is appended to the task name. A task we do not recognise gets a size question.
+  const Q = (id, q, ...opts) => ({ id, q, options: opts.map(([label, mins, add]) => ({ label, mins, add })) });
+  const ASKS = {
+    gym:   [Q('focus', 'What are you training?', ['Legs', 90, 'legs'], ['Upper body', 75, 'upper body'], ['Full body', 90, 'full body'], ['Cardio', 45, 'cardio']),
+            Q('time', 'How long?', ['30 min', 30], ['1 hour', 60], ['2 hours', 120])],
+    run:   [Q('dist', 'How far?', ['3 km', 25, '3 km'], ['5 km', 35, '5 km'], ['10 km', 70, '10 km']),
+            Q('pace', 'What pace?', ['Easy', null, 'easy'], ['Steady', null, 'steady'], ['Fast', null, 'fast'])],
+    study: [Q('type', 'What kind?', ['Reading', 45, 'reading'], ['Practice problems', 60, 'practice'], ['Revision', 90, 'revision'], ['Writing', 60, 'writing']),
+            Q('time', 'How long?', ['25 min', 25], ['1 hour', 60], ['2 hours', 120])],
+    cook:  [Q('meal', 'What are you making?', ['Breakfast', 30, 'breakfast'], ['Lunch', 45, 'lunch'], ['Dinner', 60, 'dinner'], ['Meal prep', 120, 'meal prep']),
+            Q('size', 'For how many?', ['Just me', null, 'for 1'], ['2 people', null, 'for 2'], ['A group', null, 'for a group'])],
+    yoga:  [Q('style', 'Which style?', ['Gentle', 30, 'gentle'], ['Flow', 45, 'flow'], ['Stretch only', 20, 'stretch']),
+            Q('time', 'How long?', ['20 min', 20], ['45 min', 45], ['1 hour', 60])],
+    work:  [Q('output', 'What will be finished?', ['A draft', 90, 'draft'], ['Some code', 120, 'code'], ['Admin and email', 30, 'admin'], ['A plan', 30, 'plan']),
+            Q('time', 'How long?', ['30 min', 30], ['1 hour', 60], ['2 hours', 120])],
+    art:   [Q('medium', 'What will you make?', ['A drawing', 45, 'drawing'], ['A painting', 90, 'painting'], ['Music', 45, 'music'], ['Writing', 45, 'writing']),
+            Q('time', 'How long?', ['30 min', 30], ['1 hour', 60], ['2 hours', 120])]
+  };
+  const HOME_ASKS = [Q('room', 'Which part?', ['One room', 45, 'one room'], ['Whole place', 120, 'whole place'], ['Just a surface', 15, 'one surface']),
+                     Q('time', 'How long?', ['15 min', 15], ['30 min', 30], ['1 hour', 60])];
+  const OTHER_ASKS = [Q('size', 'How big is it?', ['Quick', 30], ['A session', 90], ['Half a day', 240]),
+                      Q('where', 'Where will you do it?', ['At home', null, 'at home'], ['Out and about', null, 'out'], ['At work', null, 'at work'])];
+
+  function questionsFor(task) {
+    const name = ((task && task.name) || '').trim();
+    if (name.length < 3) return [];
+    const kind = kindOf(task);
+    return kind ? ASKS[kind] : HOME_RE.test(name) ? HOME_ASKS : OTHER_ASKS;
+  }
+
+  return { kindOf, load, whereFor, whereHTML, fullHTML, setProvider, questionsFor };
 })();

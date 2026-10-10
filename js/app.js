@@ -9,8 +9,10 @@ const pad = n => String(n).padStart(2, '0');
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmtMoney = n => '$' + (Number.isInteger(n) ? n.toLocaleString('en-US') : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 // Economics: a stake below the minimum is not worth the payment fees; a ticket costs half the minimum stake.
-const MIN_STAKE = 10, TICKET_PRICE = 5;
+const MIN_STAKE = 10, TICKET_PRICE = 1;
 const TICKET_PACKS = [1, 3, 5];
+const RETRIES_PER_MONTH = 4, RETRY_PRICE = 1;
+const RETRY_PACKS = [1, 3, 5];
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
 
 function fmtCountdown(ms) {
@@ -119,11 +121,18 @@ function normalizeState(st) {
     else ['category', 'goal', 'impact'].forEach(k => { if (c[k] === undefined) c[k] = base[k]; });
   });
   if (!Number.isInteger(st.tickets) || st.tickets < 0) st.tickets = 0;
+  if (!Number.isInteger(st.extraRetries) || st.extraRetries < 0) st.extraRetries = 0;   // bought retries; they do not expire
+  if (!st.retries || typeof st.retries.used !== 'number') st.retries = { month: '', used: 0 };
   st.defaultPenalty = Math.max(MIN_STAKE, st.defaultPenalty || 0);   // tasks already running keep the stake they were made with
   st.tasks.forEach(t => { if (t.status === 'failed' && !t.charityId) t.charityId = st.selectedCharityId; });
   return st;
 }
-function initState(u) { state = normalizeState(loadState(u) || newStateFor(u)); saveState(); }
+function initState(u) {
+  let saved = loadState(u);
+  if (u === 'demo' && saved && saved.seedVersion !== MOCK.SEED_VERSION) saved = null;   // the demo's starting numbers changed: start it over
+  state = normalizeState(saved || newStateFor(u));
+  saveState();
+}
 const taskById = id => state.tasks.find(t => t.id === id);
 const selectedCharity = () => state.charities.find(c => c.id === state.selectedCharityId) || state.charities[0];
 
@@ -261,6 +270,7 @@ function showView(name) {
     if (b.classList.contains('nav-item') || b.classList.contains('bn-item')) on ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current');
   });
   window.scrollTo({ top: 0 });
+  $('#tasks-active-list').classList.remove('still');
   document.body.dataset.view = name;
   if (state) renderOfferBanner();
   if (name === 'record' && state) playRecordCounters();
@@ -507,6 +517,8 @@ function renderRecord() {
 
 function updateTopbarBalance() {
   $('#topbar-balance').textContent = fmtMoney(state.balance);
+  $('#topbar-retries').textContent = `↩️ ${retriesLeft()}`;
+  $('#topbar-retries').setAttribute('aria-label', `${retriesLeft()} ${retriesLeft() === 1 ? 'retry' : 'retries'} left. Open shop`);
   $('#topbar-tickets').textContent = `🎫 ${state.tickets}`;
   $('#topbar-tickets').setAttribute('aria-label', `${state.tickets} bail-out ticket${state.tickets === 1 ? '' : 's'}. Open shop`);
   $$('[data-badge="tickets"]').forEach(b => { b.textContent = state.tickets; b.classList.toggle('hidden', !state.tickets); });
@@ -532,6 +544,18 @@ const fmtLen = ms => {
 const defaultRetryMs = t => Math.min(7 * 86400000, Math.max(15 * 60000, t.durationMs));         // same length as the original
 // "Same length", plus 1h, 4h and 24h, without duplicates, shortest first.
 const retryChoices = t => [...new Set([defaultRetryMs(t), 3600000, 4 * 3600000, 24 * 3600000])].sort((a, b) => a - b);
+
+// Four free retries a month, then bought ones. The free count starts over each calendar month.
+const monthKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+function freeRetriesLeft() {
+  if (state.retries.month !== monthKey()) state.retries = { month: monthKey(), used: 0 };
+  return Math.max(0, RETRIES_PER_MONTH - state.retries.used);
+}
+const retriesLeft = () => freeRetriesLeft() + state.extraRetries;
+function useRetry() {                                                // free ones go first, so bought ones last
+  if (freeRetriesLeft() > 0) state.retries.used += 1;
+  else state.extraRetries -= 1;
+}
 
 // Stakes held for an open offer can't be spent on tickets or new tasks until the offer ends.
 const heldStake = () => state.tasks.filter(t => t.status === 'offer').reduce((sum, t) => sum + t.penalty, 0);
@@ -575,12 +599,11 @@ function chargeMiss(t, retried) {
 }
 
 // Clears a task the person is truly blocked on: one ticket is spent, the stake is never charged.
-function bailOut(id) {
+async function bailOut(id) {
   const t = taskById(id);
   if (!t || t.status !== 'active' || (t.attempt || 1) === 2) return;   // no bailing out of a retry
   if (state.tickets < 1) {
-    toast('No tickets left. Get one in the Shop', 'error');
-    showView('shop');
+    toast('No tickets left. Buy one in the Shop', 'error');     // stay on this screen
     return;
   }
   state.tickets -= 1;
@@ -588,6 +611,10 @@ function bailOut(id) {
   t.bailedAt = Date.now();
   pushActivity('🎫', `Bailed out of "${t.name}" · ${fmtMoney(t.penalty)} stake kept`, 'bail');
   saveState();
+  // the cleared card folds away and the others stay put: no entry animations replay, no jump to the top
+  const card = document.querySelector(`.task-card[data-task-id="${id}"]`);
+  $('#tasks-active-list').classList.add('still');
+  if (card && !reduceMotion()) { card.classList.add('leaving'); await sleep(200); }
   renderAll();
   toast(`Cleared "${t.name}". ${state.tickets} ticket${state.tickets === 1 ? '' : 's'} left`, 'success');
 }
@@ -604,7 +631,30 @@ function renderShop() {
       <button class="btn ghost sm" data-buy="${n}" ${cost > spendable() ? 'disabled' : ''}>Buy</button>
     </div>`;
   }).join('');
+  const free = freeRetriesLeft();
+  $('#shop-retries').textContent = retriesLeft();
+  $('#shop-retry-free').textContent = `${free} of ${RETRIES_PER_MONTH} free this month${state.extraRetries ? `, ${state.extraRetries} bought` : ''}`;
+  $('#shop-retry-price').textContent = fmtMoney(RETRY_PRICE);
+  $('#shop-retry-packs').innerHTML = RETRY_PACKS.map(n => {
+    const cost = n * RETRY_PRICE;
+    return `<div class="shop-pack">
+      <div><b>${n} ${n > 1 ? 'retries' : 'retry'}</b><small>${fmtMoney(cost)}</small></div>
+      <button class="btn ghost sm" data-buy-retry="${n}" ${cost > spendable() ? 'disabled' : ''}>Buy</button>
+    </div>`;
+  }).join('');
   $('#shop-note').textContent = spendable() < TICKET_PRICE ? 'Add funds in Settings to buy tickets.' : '';
+}
+
+function buyRetries(n) {
+  const cost = n * RETRY_PRICE;
+  if (!RETRY_PACKS.includes(n)) return;
+  if (cost > spendable()) { toast(`Not enough balance (${fmtMoney(spendable())})`, 'error'); return; }
+  state.balance -= cost;
+  state.extraRetries += n;
+  pushActivity('↩️', `Bought ${n} ${n > 1 ? 'retries' : 'retry'} for ${fmtMoney(cost)}`, 'ticket');
+  saveState();
+  renderAll();
+  toast(`${n} ${n > 1 ? 'retries' : 'retry'} added`, 'success');
 }
 
 function buyTickets(n) {
@@ -623,6 +673,8 @@ function acceptOffer(id) {
   const t = taskById(id);
   if (!t || t.status !== 'offer') return;
   if (Date.now() >= t.offerExpiresAt) { chargeMiss(t, false); renderAll(); return; }   // it lapsed between ticks
+  if (retriesLeft() < 1) { toast('No retries left. Get more in the Shop', 'error'); showView('shop'); return; }
+  useRetry();
   const ms = t.offerChoiceMs || defaultRetryMs(t), now = Date.now();
   t.status = 'active';
   t.attempt = 2;
@@ -631,7 +683,7 @@ function acceptOffer(id) {
   t.deadline = now + ms;
   t.byDate = false;
   delete t.offerExpiresAt; delete t.offerChoiceMs;
-  pushActivity('🎲', `One more try on "${t.name}"`, 'offer');
+  pushActivity('↩️', `One more try on "${t.name}"`, 'offer');
   saveState();
   renderAll();
   toast(`One more try. Finish by ${fmtDeadline(t.deadline)}`, 'success');
@@ -669,8 +721,9 @@ function offerCardHTML(t) {
       <span class="offer-timer num" data-offer-timer="${t.id}" aria-label="Offer ends in">${fmtCountdown(remaining)}</span>
     </div>
     <p class="offer-line">Finish it in time to keep your ${fmtMoney(t.penalty)}. Miss again and it goes to charity.</p>
+    <p class="offer-left">${retriesLeft() ? `${retriesLeft()} ${retriesLeft() === 1 ? 'retry' : 'retries'} left` : 'No retries left'}</p>
     <div class="chip-row" role="radiogroup" aria-label="Time to finish">${chips}</div>
-    <div class="offer-actions"><button class="btn primary" data-offer-accept="${t.id}">Accept</button><button class="btn ghost" data-offer-decline="${t.id}">Let it go</button></div>
+    <div class="offer-actions">${retriesLeft() ? `<button class="btn primary" data-offer-accept="${t.id}">Accept</button>` : `<button class="btn primary" data-offer-shop>Get retries</button>`}<button class="btn ghost" data-offer-decline="${t.id}">Let it go</button></div>
   </article>`;
 }
 
@@ -892,10 +945,42 @@ async function updateAddAssist() {
   box.innerHTML = where ? `${ASSIST.whereHTML(where, true)}${help ? '<button type="button" class="link-btn" id="at-assist-more">See details</button>' : ''}` : '';
 }
 
+// Set the time limit from a number of minutes: a matching preset lights up, anything else opens the custom fields.
+function setDuration(h, m) {
+  $('#at-hours').value = h;
+  $('#at-minutes').value = m;
+  const match = $$('#duration-presets [data-h]').find(c => +c.dataset.h === h && +c.dataset.m === m);
+  $$('#duration-presets .chip').forEach(c => c.classList.toggle('active', c === match));
+  showCustomDuration(!match);
+}
+
+// Questions that belong to this particular task. Answers fill in the name and the time limit.
+let refine = { base: '', picks: {} };
+function renderRefine() {
+  const box = $('#at-refine');
+  const qs = ASSIST.questionsFor({ name: refine.base });
+  box.classList.toggle('hidden', !qs.length);
+  box.innerHTML = qs.map(q => `<div class="refine-q" role="group" aria-label="${esc(q.q)}"><span>${esc(q.q)}</span>
+    <div class="chip-row">${q.options.map((o, i) => `<button type="button" class="chip${refine.picks[q.id] === i ? ' active' : ''}" data-rq="${q.id}" data-ri="${i}">${esc(o.label)}</button>`).join('')}</div></div>`).join('');
+}
+function applyRefine(qid, i) {
+  const q = ASSIST.questionsFor({ name: refine.base }).find(x => x.id === qid);
+  if (!q || !q.options[i]) return;
+  refine.picks[qid] = refine.picks[qid] === i ? undefined : i;           // tap again to undo
+  const o = q.options[i];
+  if (o.mins && refine.picks[qid] === i) setDuration(Math.floor(o.mins / 60), o.mins % 60);
+  const extra = ASSIST.questionsFor({ name: refine.base })
+    .map(x => x.options[refine.picks[x.id]]).filter(x => x && x.add).map(x => x.add).join(', ');
+  $('#at-name').value = (extra ? `${refine.base} · ${extra}` : refine.base).slice(0, 40);
+  renderRefine(); updateDuePreview(); updateAddAssist();
+}
+
 function openAddTask(preset) {
   const p = preset && preset.name ? preset : null;   // click handlers pass an Event; only plain presets count
   const h = p ? p.h : 1, m = p ? p.m : 0;
   $('#at-name').value = p ? p.name : '';
+  refine = { base: p ? p.name : '', picks: {} };
+  renderRefine();
   $('#at-hours').value = h;
   $('#at-minutes').value = m;
   $('#at-penalty').value = Math.max(MIN_STAKE, p ? p.stake : (state.defaultPenalty || MIN_STAKE));
@@ -1009,7 +1094,7 @@ function addFunds(amount) {
 
 function resetDemoData() {
   localStorage.removeItem(keyFor(LS_STATE));
-  state = newStateFor(currentUser.username);
+  state = normalizeState(newStateFor(currentUser.username));
   saveState();
   renderAll();
   showView('home');
@@ -1103,7 +1188,7 @@ function downscaleFile(file) {
   });
 }
 
-/* ---------- proof flow: AI verification (POST /api/verify-proof, Claude vision) ---------- */
+/* ---------- proof flow: mock AI verification ---------- */
 function resetAnalysisUI() {
   $$('#pf-step-list li').forEach(li => li.classList.remove('active', 'done'));
   $('#pf-result').classList.add('hidden');
@@ -1117,17 +1202,7 @@ async function runAnalysis() {
   $('#pf-image').src = pf.image;
   const t = taskById(pf.taskId);
 
-  // Fire the request now; the step animation runs alongside it
-  const request = fetch('/api/verify-proof', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ task: t.name, image: pf.image })
-  }).then(async res => {
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body.error || 'Verification failed');
-    return body;
-  });
-  request.catch(() => {});
+  const verdict = MOCK.verifyProof(t);                              // pretend check; the steps below are for show
 
   for (const li of $$('#pf-step-list li')) {
     li.classList.add('active');
@@ -1136,30 +1211,8 @@ async function runAnalysis() {
     li.classList.add('done');
   }
 
-  let data;
-  try {
-    data = await request;
-  } catch (e) {
-    // No verdict means no completion: the user can only retry
-    pf.result = null;
-    renderPfError(e.message);
-    return;
-  }
-  pf.result = { ...data, at: Date.now() };
+  pf.result = { ...verdict, at: Date.now() };
   renderPfResult();
-}
-
-function renderPfError(msg) {
-  const icon = $('#pf-verdict-icon');
-  icon.textContent = '!';
-  icon.classList.add('fail');
-  $('#pf-verdict-title').textContent = "Couldn't check your photo";
-  $('#pf-verdict-sub').textContent = `${msg} The task stays open and the timer keeps running.`;
-  $('#pf-conf-text').textContent = '–';
-  $('#pf-conf-fill').style.width = '0%';
-  $('#pf-detected').innerHTML = '';
-  $('#pf-result').classList.remove('hidden');
-  $('#btn-pf-retake').classList.remove('hidden');
 }
 
 function renderPfResult() {
@@ -1210,7 +1263,7 @@ function twoStep(btn, fn) {
   }
   btn.dataset.armed = '1';
   btn.dataset.orig = btn.textContent;
-  btn.textContent = 'Tap again to confirm';
+  btn.textContent = 'Confirm';
   btn.classList.add('armed');
   setTimeout(() => {
     if (btn.isConnected && btn.dataset.armed) {
@@ -1337,7 +1390,7 @@ function bindEvents() {
   // navigation + logout
   document.addEventListener('click', e => {
     const v = e.target.closest('[data-view]');
-    if (v) showView(v.dataset.view);
+    if (v && v !== document.body) showView(v.dataset.view);   // <body> carries the current view in data-view; a click inside it is not navigation
   });
   $('#btn-logout').addEventListener('click', logout);
   $('#btn-logout2').addEventListener('click', logout);
@@ -1372,6 +1425,8 @@ function bindEvents() {
   $('#btn-cancel-add').addEventListener('click', closeAddTask);
   $('#overlay-add').addEventListener('click', e => { if (e.target.id === 'overlay-add') closeAddTask(); });
   $('#add-task-form').addEventListener('submit', submitAddTask);
+  $('#at-name').addEventListener('input', () => { refine = { base: $('#at-name').value.trim(), picks: {} }; renderRefine(); });   // typing starts the questions over
+  $('#at-refine').addEventListener('click', e => { const c = e.target.closest('[data-rq]'); if (c) applyRefine(c.dataset.rq, +c.dataset.ri); });
   ['#at-name', '#at-hours', '#at-minutes', '#at-date', '#at-time'].forEach(sel => $(sel).addEventListener('input', () => { updateDuePreview(); updateAddAssist(); }));
   $('#at-date').addEventListener('input', () => $$('#date-presets .chip').forEach(c => c.classList.remove('active')));
   $$('.seg-btn').forEach(b => b.addEventListener('click', () => setAddMode(b.dataset.mode)));
@@ -1415,12 +1470,14 @@ function bindEvents() {
       }
       return;
     }
+    if (e.target.closest('[data-offer-shop]')) return showView('shop');
     const ac = e.target.closest('[data-offer-accept]'); if (ac) return acceptOffer(ac.dataset.offerAccept);
     const dc = e.target.closest('[data-offer-decline]'); if (dc) return declineOffer(dc.dataset.offerDecline);
     const hp = e.target.closest('[data-help]');
     if (hp) { const t = taskById(hp.dataset.help); if (t) openHelp({ name: t.name }, t.byDate ? undefined : Math.round(t.durationMs / 60000)); return; }
     const c = e.target.closest('[data-complete]'); if (c) return handleComplete(c);
     const bl = e.target.closest('[data-bail]'); if (bl) return twoStep(bl, () => bailOut(bl.dataset.bail));
+    const br = e.target.closest('[data-buy-retry]'); if (br) return twoStep(br, () => buyRetries(+br.dataset.buyRetry));
     const by = e.target.closest('[data-buy]'); if (by) return twoStep(by, () => buyTickets(+by.dataset.buy));
     const r = e.target.closest('[data-report]'); if (r) openReport(r.dataset.report);
     const s = e.target.closest('[data-select]'); if (s) selectCharity(s.dataset.select);
