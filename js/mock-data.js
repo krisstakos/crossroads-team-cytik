@@ -41,7 +41,7 @@ const MOCK = (function () {
   // A newly created account: some starting funds, no tasks, so the setup suggestions are what fills the screen.
   function freshState() {
     return {
-      balance: 500, totalSent: 0, defaultPenalty: 5, selectedCharityId: 'ocean', charities: charities(), tasks: [],
+      balance: 500, tickets: 0, totalSent: 0, defaultPenalty: 10, selectedCharityId: 'ocean', charities: charities(), tasks: [],
       activity: [{ icon: '💰', text: 'Account funded with $500.00', at: Date.now(), type: 'funds' }]
     };
   }
@@ -72,6 +72,7 @@ const MOCK = (function () {
   function seedState() {
     const now = Date.now();
     return {
+      tickets: 1,              // the demo account starts with one bail-out ticket
       balance: 235,            // prefilled mock account ($250 funded, $15 already sent to charity)
       totalSent: 15,           // total penalties sent to charity by this user
       defaultPenalty: 10,

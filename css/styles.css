@@ -165,7 +165,7 @@ h3{font-size:15.5px;font-weight:600;letter-spacing:-.01em}
 .wordmark.mini{font-size:22px}
 .balance-pill{background:var(--surface-2);border:1px solid var(--line);padding:6px 14px;border-radius:99px;font-weight:600;font-size:14.5px;min-height:36px}
 
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:50;display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:50;display:grid;grid-template-columns:repeat(5,1fr);background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
 .bn-item{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 7px;min-height:56px;color:var(--muted)}
 .bn-item small{font-size:11.5px;font-weight:600}
 .bn-ico{position:relative;display:grid;place-items:center;width:56px;height:30px;border-radius:99px;transition:background .15s}
@@ -737,3 +737,21 @@ body:not([data-view="home"]) .fab{display:none}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-delay:0ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+/* shop and bail-out tickets */
+.topbar-pills{display:flex;flex-direction:column;align-items:center;background:var(--surface-2);border:1px solid var(--line);border-radius:18px;padding:4px 14px 3px}
+.topbar-pills .balance-pill{background:none;border:0;padding:0;min-height:0;line-height:1.25;border-radius:0}
+.topbar-pills #topbar-tickets{font-size:11.5px;font-weight:500;color:var(--muted);align-self:flex-end}
+.shop-stack{display:flex;flex-direction:column;gap:16px;max-width:560px}
+.shop-balance{display:flex;justify-content:space-between;align-items:flex-end;padding:20px}
+.shop-wallet{text-align:right}
+.shop-packs{display:flex;flex-direction:column;gap:10px}
+.shop-pack{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
+.shop-pack b{font-size:15px}
+.shop-pack small{display:block;color:var(--muted)}
+.h-amt.bail{color:var(--muted)}
+
+/* inside the phone frame: hide scrollbars for a cleaner look */
+html.embedded,html.embedded *{scrollbar-width:none}
+html.embedded ::-webkit-scrollbar{display:none}
+html.embedded,html.embedded body{overflow-x:hidden}

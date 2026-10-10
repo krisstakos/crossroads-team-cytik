@@ -8,6 +8,9 @@ const sleep = ms => new Promise(res => setTimeout(res, ms));
 const pad = n => String(n).padStart(2, '0');
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmtMoney = n => '$' + (Number.isInteger(n) ? n.toLocaleString('en-US') : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+// Economics: a stake below the minimum is not worth the payment fees; a ticket costs half the minimum stake.
+const MIN_STAKE = 10, TICKET_PRICE = 5;
+const TICKET_PACKS = [1, 3, 5];
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
 
 function fmtCountdown(ms) {
@@ -115,6 +118,8 @@ function normalizeState(st) {
     if (!c) st.charities.push(base);
     else ['category', 'goal', 'impact'].forEach(k => { if (c[k] === undefined) c[k] = base[k]; });
   });
+  if (!Number.isInteger(st.tickets) || st.tickets < 0) st.tickets = 0;
+  st.defaultPenalty = Math.max(MIN_STAKE, st.defaultPenalty || 0);   // tasks already running keep the stake they were made with
   st.tasks.forEach(t => { if (t.status === 'failed' && !t.charityId) t.charityId = st.selectedCharityId; });
   return st;
 }
@@ -276,7 +281,7 @@ function enterApp(opts = {}) {
   }
 }
 
-function renderAll() { renderHome(); renderRecord(); renderCharities(); renderSettings(); updateTopbarBalance(); }
+function renderAll() { renderHome(); renderRecord(); renderCharities(); renderSettings(); renderShop(); updateTopbarBalance(); }
 
 /* ---------- today: live timers only ---------- */
 const RING_LONG = 5; // countdown strings longer than "mm:ss" get a smaller ring numeral
@@ -286,7 +291,8 @@ function taskCardHTML(t, lead) {
   const text = fmtCountdown(remaining);
   const complete = `<button class="btn primary complete-btn" data-complete="${t.id}">Complete</button>`;
   const help = ASSIST.kindOf(t) ? `<button class="btn ghost help-btn" data-help="${t.id}">Help</button>` : '';
-  const btn = `<div class="card-actions">${complete}${help}</div>`;
+  const bail = `<button class="btn ghost bail-btn" data-bail="${t.id}">Bail out</button>`;
+  const btn = `<div class="card-actions">${complete}${help}${bail}</div>`;
   const del = `<button class="icon-btn delete-btn" data-delete="${t.id}" aria-label="Delete ${esc(t.name)}">✕</button>`;
   const countdown = `<span class="countdown" data-countdown="${t.id}" aria-label="${text} remaining">${digitsHTML(text)}</span>`;
 
@@ -331,13 +337,13 @@ const prefsFromProfile = () => (state && state.profile ? { when: state.profile.w
 /* ---------- recommended tasks ---------- */
 const RECOMMENDED = [
   { name: 'Gym visit',       icon: '🏋️', h: 2, m: 0,  stake: 10 },
-  { name: 'Morning run',     icon: '🏃', h: 1, m: 0,  stake: 5 },
-  { name: 'Study session',   icon: '📚', h: 1, m: 0,  stake: 5 },
+  { name: 'Morning run',     icon: '🏃', h: 1, m: 0,  stake: 10 },
+  { name: 'Study session',   icon: '📚', h: 1, m: 0,  stake: 10 },
   { name: 'Deep work block', icon: '💻', h: 2, m: 0,  stake: 10 },
-  { name: 'Cook dinner',     icon: '🍳', h: 1, m: 0,  stake: 5 },
-  { name: 'Tidy the room',   icon: '🧹', h: 0, m: 30, stake: 3 },
-  { name: 'Yoga or stretch', icon: '🧘', h: 0, m: 30, stake: 5 },
-  { name: 'Water the plants', icon: '🌿', h: 0, m: 30, stake: 3 }
+  { name: 'Cook dinner',     icon: '🍳', h: 1, m: 0,  stake: 10 },
+  { name: 'Tidy the room',   icon: '🧹', h: 0, m: 30, stake: 10 },
+  { name: 'Yoga or stretch', icon: '🧘', h: 0, m: 30, stake: 10 },
+  { name: 'Water the plants', icon: '🌿', h: 0, m: 30, stake: 10 }
 ];
 
 function recommendedTasks() {
@@ -400,7 +406,7 @@ function renderHome() {
 const DAY_MS = 86400000;
 let historyFilter = 'all', historyLimit = 8;
 const startOfDay = ts => { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); };
-const resolvedAt = t => (t.status === 'completed' ? t.completedAt : (t.failedAt || t.deadline));
+const resolvedAt = t => (t.status === 'completed' ? t.completedAt : t.status === 'bailed' ? t.bailedAt : (t.failedAt || t.deadline));
 const resolvedTasks = () => state.tasks.filter(t => t.status !== 'active').sort((a, b) => resolvedAt(b) - resolvedAt(a));
 
 function dayLabel(ts) {
@@ -413,11 +419,12 @@ function dayLabel(ts) {
 function historyStats() {
   const list = resolvedTasks();
   const done = list.filter(t => t.status === 'completed');
+  const counted = list.filter(t => t.status !== 'bailed');                    // a bailed task is neither a win nor a miss
   let streak = 0;
-  for (const t of list) { if (t.status !== 'completed') break; streak++; }   // newest first, stop at the first miss
+  for (const t of counted) { if (t.status !== 'completed') break; streak++; } // newest first, stop at the first miss
   return {
-    list, done: done.length, missed: list.length - done.length, streak,
-    rate: list.length ? Math.round((done.length / list.length) * 100) : null,
+    list, done: done.length, missed: counted.length - done.length, streak,
+    rate: counted.length ? Math.round((done.length / counted.length) * 100) : null,
     kept: done.reduce((sum, t) => sum + t.penalty, 0)
   };
 }
@@ -426,7 +433,7 @@ function historyStats() {
 function chartData(list) {
   const today = startOfDay(Date.now());
   const days = Array.from({ length: 14 }, (_, i) => ({ ts: today - (13 - i) * DAY_MS, done: 0, missed: 0 }));
-  list.forEach(t => {
+  list.filter(t => t.status !== 'bailed').forEach(t => {
     const d = days.find(x => x.ts === startOfDay(resolvedAt(t)));
     if (d) t.status === 'completed' ? d.done++ : d.missed++;
   });
@@ -444,6 +451,13 @@ function chartHTML(days) {
 }
 
 function historyItemHTML(t) {
+  if (t.status === 'bailed') {
+    return `<div class="history-item">
+      <span class="h-dot" aria-hidden="true"></span>
+      <div class="h-main"><p>${esc(t.name)}</p><small>Bailed out · ticket used</small></div>
+      <span class="h-amt bail">🎫 ${fmtMoney(t.penalty)} kept</span>
+    </div>`;
+  }
   const done = t.status === 'completed';
   const when = resolvedAt(t);
   const charity = state.charities.find(c => c.id === t.charityId);
@@ -486,7 +500,12 @@ function renderRecord() {
   $$('#history-filter .seg-btn').forEach(b => { const on = b.dataset.hf === historyFilter; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
 }
 
-function updateTopbarBalance() { $('#topbar-balance').textContent = fmtMoney(state.balance); }
+function updateTopbarBalance() {
+  $('#topbar-balance').textContent = fmtMoney(state.balance);
+  $('#topbar-tickets').textContent = `🎫 ${state.tickets}`;
+  $('#topbar-tickets').setAttribute('aria-label', `${state.tickets} bail-out ticket${state.tickets === 1 ? '' : 's'}. Open shop`);
+  $$('[data-badge="tickets"]').forEach(b => { b.textContent = state.tickets; b.classList.toggle('hidden', !state.tickets); });
+}
 
 /* ---------- activity & money flow ---------- */
 function pushActivity(icon, text, type) {
@@ -509,6 +528,51 @@ function failTask(t) {
   flash();
   toast(`Missed "${t.name}". ${fmtMoney(charged)} to ${c.name}`, 'warn');
   if (state.balance <= 0) setTimeout(() => toast('Balance is empty', 'error'), 400);
+}
+
+// Clears a task the person is truly blocked on: one ticket is spent, the stake is never charged.
+function bailOut(id) {
+  const t = taskById(id);
+  if (!t || t.status !== 'active') return;
+  if (state.tickets < 1) {
+    toast('No tickets left. Get one in the Shop', 'error');
+    showView('shop');
+    return;
+  }
+  state.tickets -= 1;
+  t.status = 'bailed';
+  t.bailedAt = Date.now();
+  pushActivity('🎫', `Bailed out of "${t.name}" · ${fmtMoney(t.penalty)} stake kept`, 'bail');
+  saveState();
+  renderAll();
+  toast(`Cleared "${t.name}". ${state.tickets} ticket${state.tickets === 1 ? '' : 's'} left`, 'success');
+}
+
+/* ---------- shop: bail-out tickets ---------- */
+function renderShop() {
+  $('#shop-tickets').textContent = state.tickets;
+  $('#shop-balance').textContent = fmtMoney(state.balance);
+  $('#shop-price').textContent = fmtMoney(TICKET_PRICE);
+  $('#shop-packs').innerHTML = TICKET_PACKS.map(n => {
+    const cost = n * TICKET_PRICE;
+    return `<div class="shop-pack">
+      <div><b>${n} ticket${n > 1 ? 's' : ''}</b><small>${fmtMoney(cost)}</small></div>
+      <button class="btn ghost sm" data-buy="${n}" ${cost > state.balance ? 'disabled' : ''}>Buy</button>
+    </div>`;
+  }).join('');
+  $('#shop-note').textContent = state.balance < TICKET_PRICE ? 'Add funds in Settings to buy tickets.' : '';
+}
+
+function buyTickets(n) {
+  const cost = n * TICKET_PRICE;
+  if (!TICKET_PACKS.includes(n)) return;
+  if (cost > state.balance) { toast(`Not enough balance (${fmtMoney(state.balance)})`, 'error'); return; }
+  state.balance -= cost;
+  state.tickets += n;
+  pushActivity('🎫', `Bought ${n} bail-out ticket${n > 1 ? 's' : ''} for ${fmtMoney(cost)}`, 'ticket');
+  saveState();
+  renderAll();
+  toast(`${n} ticket${n > 1 ? 's' : ''} added`, 'success');
 }
 
 function completeTask(t, proof) {
@@ -738,7 +802,7 @@ function openAddTask(preset) {
   $('#at-name').value = p ? p.name : '';
   $('#at-hours').value = h;
   $('#at-minutes').value = m;
-  $('#at-penalty').value = p ? p.stake : (state.defaultPenalty || 10);
+  $('#at-penalty').value = Math.max(MIN_STAKE, p ? p.stake : (state.defaultPenalty || MIN_STAKE));
   selectedIcon = p && p.icon ? p.icon : null;
   const match = $$('#duration-presets [data-h]').find(c => +c.dataset.h === h && +c.dataset.m === m);
   $$('#duration-presets .chip').forEach(c => c.classList.toggle('active', c === match));
@@ -761,8 +825,9 @@ function closeAddTask() {
 function submitAddTask(e) {
   e.preventDefault();
   const name = $('#at-name').value.trim();
-  const penalty = Math.max(1, Math.round(+$('#at-penalty').value) || state.defaultPenalty);
+  const penalty = Math.round(+$('#at-penalty').value) || state.defaultPenalty;
   if (!name) { toast('Name your task', 'error'); return; }
+  if (penalty < MIN_STAKE) { toast(`Minimum stake is ${fmtMoney(MIN_STAKE)}`, 'error'); return; }
   const when = computeDeadline();
   if (!when.ok) { toast(when.error, 'error'); return; }
   if (penalty > state.balance) { toast(`Stake is above your balance (${fmtMoney(state.balance)})`, 'error'); return; }
@@ -1246,6 +1311,8 @@ function bindEvents() {
     const hp = e.target.closest('[data-help]');
     if (hp) { const t = taskById(hp.dataset.help); if (t) openHelp({ name: t.name }, t.byDate ? undefined : Math.round(t.durationMs / 60000)); return; }
     const c = e.target.closest('[data-complete]'); if (c) return handleComplete(c);
+    const bl = e.target.closest('[data-bail]'); if (bl) return twoStep(bl, () => bailOut(bl.dataset.bail));
+    const by = e.target.closest('[data-buy]'); if (by) return twoStep(by, () => buyTickets(+by.dataset.buy));
     const d = e.target.closest('[data-delete]'); if (d) return deleteTask(d.dataset.delete);
     const r = e.target.closest('[data-report]'); if (r) openReport(r.dataset.report);
     const s = e.target.closest('[data-select]'); if (s) selectCharity(s.dataset.select);
@@ -1258,7 +1325,7 @@ function bindEvents() {
   });
   $('#btn-save-default').addEventListener('click', () => {
     const v = Math.round(+$('#default-penalty').value);
-    if (!v || v < 1) return toast('Enter an amount', 'error');
+    if (!v || v < MIN_STAKE) return toast(`Minimum stake is ${fmtMoney(MIN_STAKE)}`, 'error');
     state.defaultPenalty = v;
     saveState();
     toast('Saved', 'success');

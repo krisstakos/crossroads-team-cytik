@@ -82,7 +82,7 @@ const ONBOARDING = (function () {
       tiles = optionsFor(s.id).map(o => tileHTML({ value: o.id, label: o.label, icon: s.id === 'when' ? WHEN_ICON[o.id] : '' }, sel[MULTI[s.id].key].includes(o.id), true)).join('');
     }
     const custom = s.id === 'stake'
-      ? `<label class="onb-custom"><span>Other amount</span><div><b>$</b><input id="onb-custom-stake" type="number" min="1" max="100" inputmode="numeric" value="${sel.customStake || ''}"/></div></label>`
+      ? `<label class="onb-custom"><span>Other amount</span><div><b>$</b><input id="onb-custom-stake" type="number" min="${MIN_STAKE}" max="100" inputmode="numeric" value="${sel.customStake || ''}"/></div></label>`
       : '';
     return `<p class="onb-count">${n} of 4${s.multi ? ', pick any' : ''}</p>
       <h1 id="onb-title">${esc(s.title)}</h1>
@@ -255,7 +255,7 @@ const ONBOARDING = (function () {
       if (e.target.id !== 'onb-custom-stake') return;
       const n = Math.round(+e.target.value);
       sel.customStake = e.target.value;
-      sel.stake = n >= 1 && n <= 100 ? { id: n, label: '$' + n } : null;
+      sel.stake = n >= MIN_STAKE && n <= 100 ? { id: n, label: '$' + n } : null;
       $$('#onb-stage .tile').forEach(t => { t.classList.remove('on'); t.setAttribute('aria-checked', 'false'); });
       refreshFooter();
     });

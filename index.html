@@ -6,6 +6,8 @@
 <meta name="theme-color" content="#f6f7f6" media="(prefers-color-scheme: light)"/>
 <meta name="theme-color" content="#0b0e0c" media="(prefers-color-scheme: dark)"/>
 <script>/* apply the saved theme before first paint, so there is no flash */try{var t=localStorage.getItem("commit_theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<script>/* on a desktop-sized window, show the app inside a phone frame (add ?nophone to skip) */try{if(window.top===window&&innerWidth>600&&!/nophone/.test(location.search))location.replace("phone.html")}catch(e){}</script>
+<script>if(window.top!==window)document.documentElement.classList.add("embedded")</script>
 <title>Commit — Stay Accountable</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,6 +23,7 @@
   <symbol id="i-today" viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5"/><path d="M12 13V9M9.5 3h5"/></symbol>
   <symbol id="i-history" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></symbol>
   <symbol id="i-charity" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></symbol>
+  <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M4 7h16v3a2 2 0 0 0 0 4v3H4v-3a2 2 0 0 0 0-4z"/><path d="M14 7v10" stroke-dasharray="1.5 2"/></symbol>
   <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z"/><circle cx="12" cy="10" r="2.4"/></symbol>
   <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
   <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2"/><circle cx="9" cy="16" r="2"/></symbol>
@@ -96,10 +99,11 @@
   <aside class="sidebar">
     <h2 class="wordmark side">Commit</h2>
     <nav class="side-nav" aria-label="Main">
-      <button class="nav-item active" data-view="home"><svg class="ico"><use href="#i-today"/></svg>Today<i class="nav-badge hidden" data-badge="active" aria-hidden="true"></i></button>
-      <button class="nav-item" data-view="record"><svg class="ico"><use href="#i-history"/></svg>History</button>
-      <button class="nav-item" data-view="charities"><svg class="ico"><use href="#i-charity"/></svg>Charity</button>
-      <button class="nav-item" data-view="settings"><svg class="ico"><use href="#i-settings"/></svg>Settings</button>
+      <button class="nav-item active" data-view="home"><svg class="ico" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5"/><path d="M12 13V9M9.5 3h5"/></svg>Today<i class="nav-badge hidden" data-badge="active" aria-hidden="true"></i></button>
+      <button class="nav-item" data-view="record"><svg class="ico" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>History</button>
+      <button class="nav-item" data-view="charities"><svg class="ico" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>Charity</button>
+      <button class="nav-item" data-view="shop"><svg class="ico" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16v3a2 2 0 0 0 0 4v3H4v-3a2 2 0 0 0 0-4z"/><path d="M14 7v10" stroke-dasharray="1.5 2"/></svg>Shop<i class="nav-badge hidden" data-badge="tickets" aria-hidden="true"></i></button>
+      <button class="nav-item" data-view="settings"><svg class="ico" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2"/><circle cx="9" cy="16" r="2"/></svg>Settings</button>
     </nav>
     <div class="side-footer">
       <div class="user-chip">
@@ -114,7 +118,10 @@
     <!-- Mobile top bar -->
     <header class="topbar">
       <span class="wordmark mini">Commit</span>
-      <button id="topbar-balance" class="balance-pill" data-view="record" aria-label="Balance. Open history">$0.00</button>
+      <div class="topbar-pills">
+        <button id="topbar-balance" class="balance-pill" data-view="record" aria-label="Balance. Open history">$0.00</button>
+        <button id="topbar-tickets" class="balance-pill" data-view="shop" aria-label="Bail-out tickets. Open shop">🎫 0</button>
+      </div>
     </header>
 
     <!-- ============ TODAY ============ -->
@@ -194,6 +201,31 @@
       <p class="hint charity-note">Sample charities. No real money moves.</p>
     </section>
 
+    <!-- ============ SHOP ============ -->
+    <section id="view-shop" class="view hidden">
+      <div class="page-head"><h1>Shop</h1></div>
+
+      <div class="shop-stack">
+        <div class="card shop-balance">
+          <div>
+            <p class="sub">Your tickets</p>
+            <p class="ledger-balance" id="shop-tickets">0</p>
+          </div>
+          <div class="shop-wallet">
+            <p class="sub">Balance</p>
+            <p><strong id="shop-balance">$0.00</strong></p>
+          </div>
+        </div>
+
+        <div class="card settings-card">
+          <h3>Bail-out ticket</h3>
+          <p class="sub">Truly blocked from finishing a task? Use a ticket to clear it. You keep your stake, nothing goes to charity, and the task doesn't count as missed. A used ticket is gone. Each costs <b id="shop-price">$5</b> from your balance.</p>
+          <div class="shop-packs gap-top" id="shop-packs"></div>
+          <p class="hint" id="shop-note"></p>
+        </div>
+      </div>
+    </section>
+
     <!-- ============ SETTINGS ============ -->
     <section id="view-settings" class="view hidden">
       <div class="page-head"><h1>Settings</h1></div>
@@ -223,7 +255,7 @@
           <h3>Default stake</h3>
           <div class="inline-form">
             <span class="dollar-sign">$</span>
-            <input id="default-penalty" type="number" min="1" value="10" aria-label="Default stake"/>
+            <input id="default-penalty" type="number" min="10" value="10" aria-label="Default stake"/>
             <button id="btn-save-default" class="btn primary sm">Save</button>
           </div>
         </div>
@@ -251,10 +283,11 @@
 
   <!-- Mobile bottom nav -->
   <nav class="bottom-nav" aria-label="Main">
-    <button class="bn-item active" data-view="home"><span class="bn-ico"><svg class="ico" aria-hidden="true"><use href="#i-today"/></svg><i class="bn-badge hidden" data-badge="active" aria-hidden="true"></i></span><small>Today</small></button>
-    <button class="bn-item" data-view="record"><span class="bn-ico"><svg class="ico" aria-hidden="true"><use href="#i-history"/></svg></span><small>History</small></button>
-    <button class="bn-item" data-view="charities"><span class="bn-ico"><svg class="ico" aria-hidden="true"><use href="#i-charity"/></svg></span><small>Charity</small></button>
-    <button class="bn-item" data-view="settings"><span class="bn-ico"><svg class="ico" aria-hidden="true"><use href="#i-settings"/></svg></span><small>Settings</small></button>
+    <button class="bn-item active" data-view="home"><span class="bn-ico"><svg class="ico" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="13" r="7.5"/><path d="M12 13V9M9.5 3h5"/></svg><i class="bn-badge hidden" data-badge="active" aria-hidden="true"></i></span><small>Today</small></button>
+    <button class="bn-item" data-view="record"><span class="bn-ico"><svg class="ico" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span><small>History</small></button>
+    <button class="bn-item" data-view="charities"><span class="bn-ico"><svg class="ico" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></span><small>Charity</small></button>
+    <button class="bn-item" data-view="shop"><span class="bn-ico"><svg class="ico" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16v3a2 2 0 0 0 0 4v3H4v-3a2 2 0 0 0 0-4z"/><path d="M14 7v10" stroke-dasharray="1.5 2"/></svg><i class="bn-badge hidden" data-badge="tickets" aria-hidden="true"></i></span><small>Shop</small></button>
+    <button class="bn-item" data-view="settings"><span class="bn-ico"><svg class="ico" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2"/><circle cx="9" cy="16" r="2"/></svg></span><small>Settings</small></button>
   </nav>
   <button id="fab-add" class="fab" aria-label="New task">New task</button>
   </main>
@@ -305,8 +338,8 @@
         </div>
       </div>
       <p id="at-due-preview" class="due-preview" aria-live="polite"></p>
-      <label class="field gap-top"><span>Stake ($)</span><input id="at-penalty" type="number" min="1" value="10"/></label>
-      <p class="hint">Goes to charity if you miss it.</p>
+      <label class="field gap-top"><span>Stake ($)</span><input id="at-penalty" type="number" min="10" value="10"/></label>
+      <p class="hint">Minimum $10. Goes to charity if you miss it.</p>
       <div class="sheet-actions">
         <button type="submit" class="btn primary">Start</button>
       </div>
@@ -447,5 +480,6 @@
 <script src="js/app.js"></script>
 <script src="js/guide.js"></script>
 <script src="js/onboarding.js"></script>
+<script src="js/touch-sim.js"></script>
 </body>
 </html>

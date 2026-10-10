@@ -73,12 +73,12 @@ const GUIDE = (function () {
   const STAKE = {
     id: 'stake', title: 'Stake',
     q: 'How much will you stake per task?',
-    options: [3, 5, 10, 20].map(n => ({ id: n, label: '$' + n, keys: [String(n)] })),
-    // typed amounts: any whole number from 1 to 100
+    options: [10, 15, 20, 50].map(n => ({ id: n, label: '$' + n, keys: [String(n)] })),
+    // typed amounts: any whole number from the minimum stake to 100
     parse(text) {
       const m = /(\d{1,3})/.exec(text);
       const n = m ? +m[1] : 0;
-      return n >= 1 && n <= 100 ? { id: n, label: '$' + n, keys: [] } : null;
+      return n >= MIN_STAKE && n <= 100 ? { id: n, label: '$' + n, keys: [] } : null;
     }
   };
 
@@ -138,7 +138,7 @@ const GUIDE = (function () {
     const target = targets.length ? targets.reduce((x, y) => x + y, 0) / targets.length : 2;      // several blockers: aim for the middle
     const anyTime = !whens.length || whens.includes('varies');
     const roundTo = m => (m <= 15 ? 15 : m <= 30 ? 30 : m <= 45 ? 45 : m <= 60 ? 60 : m <= 90 ? 90 : 120);
-    const stake = Math.max(1, Math.min(a.stake.id, Math.floor(state.balance) || 1));
+    const stake = Math.max(MIN_STAKE, a.stake.id);
     const fitOpt = BLOCKER.options.find(o => o.id === blockers[0]);
     const pool = (CATALOGUE[a.area.id] || []).filter(t => t.mins <= cap * 2);
     return pool
@@ -337,7 +337,7 @@ const GUIDE = (function () {
       busy = true;
       const token = run;
       addMsg('user', esc(text));
-      await say(step.id === 'stake' ? 'Enter a number from 1 to 100.' : 'Not sure what you mean. Pick an option.', token);
+      await say(step.id === 'stake' ? `Enter a number from ${MIN_STAKE} to 100.` : 'Not sure what you mean. Pick an option.', token);
       if (token === run) busy = false;
     });
 
