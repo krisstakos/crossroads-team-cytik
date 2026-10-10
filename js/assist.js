@@ -330,7 +330,7 @@ const ASSIST = (function () {
     }
     const roads = roadsX.map(x => `<path class="map-road" d="M${f(x)} 0V${H}"/>`).join('') + roadsY.map(y => `<path class="map-road" d="M0 ${f(y)}H${W}"/>`).join('');
     const label = distance ? String(distance).split(',')[0] : '';
-    const route = `<path class="map-route" d="M${f(yx)} ${f(yy)}H${f(px)}${o.loop ? '' : `V${f(py + 4)}`}"/>`;
+    const route = `<path class="map-route" d="M${f(yx)} ${f(yy)}H${f(px)}V${f(py + 4)}"/>`;
     const loop = o.loop ? `<ellipse class="map-route loop" cx="${f(px + (W - px - 24) / 2 + 4)}" cy="${f(H * 0.5)}" rx="${f((W - px - 24) / 2 - 8)}" ry="${f(H * 0.26)}"/>` : '';
     const mx = (yx + px) / 2, my = yy;
     const pill = (x, y, t) => `<g transform="translate(${f(x)} ${f(y)})"><rect class="map-pill" x="${-(t.length * 2.9 + 8)}" y="-9" width="${f(t.length * 5.8 + 16)}" height="18" rx="9"/><text class="map-pilltext" y="4" text-anchor="middle">${esc(t)}</text></g>`;

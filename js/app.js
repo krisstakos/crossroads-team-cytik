@@ -140,6 +140,7 @@ const taskById = id => state.tasks.find(t => t.id === id);
 const selectedCharity = () => state.charities.find(c => c.id === state.selectedCharityId) || state.charities[0];
 
 function isMobile() {
+  if (MOCK_CAMERA) return true;   // the phone frame (or ?mockcam) stands in for a phone, so completing is allowed there
   return /Mobi|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && window.innerWidth < 900);
 }
 // Inside the phone.html frame (or with ?mockcam) the camera is mocked: a predefined photo stands in for the viewfinder.
