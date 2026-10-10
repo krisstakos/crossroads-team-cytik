@@ -163,6 +163,12 @@
     setTimeout(() => b.remove(), 500);
   }
 
+  // The demo is built around the gym: take the gym task's button when there is one, else the first.
+  const gymBtn = attr => {
+    const btns = [...app().querySelectorAll(`[${attr}]`)].filter(visible);
+    return btns.find(b => /gym/i.test((b.closest('.task-card') || {}).textContent || '')) || btns[0] || null;
+  };
+
   /* ---------- Scene 1: Let's get to know each other ----------
      The person is about to finish registering: press "Create account", then go through each onboarding question to the end. */
   async function scene1() {
@@ -187,10 +193,10 @@
     await tap('#onb-next');                                // Get started
 
     const answers = [                                      // which options to tick on each question, by position
-      [0, 1],                                              // what to work on
-      [0],                                                 // what gets in the way
-      [1],                                                 // when are you free
-      [1]                                                  // stake
+      [0],                                                 // what to work on: get fitter
+      [4],                                                 // what gets in the way: I lose motivation
+      [2],                                                 // when are you free: evenings
+      [1]                                                  // stake: $15
     ];
     for (const picks of answers) {
       await waitFor(q('#onb-stage .tile'));
@@ -208,12 +214,12 @@
   }
 
   /* ---------- Scene 2: Get it done ----------
-     From Today, complete the first active task: Complete, take the photo, wait for the check, confirm, close the celebration. */
+     From Today, complete the gym task: Complete, take the photo, wait for the check, confirm, close the celebration. */
   async function scene2() {
     const d = app();
     if (!q('[data-complete]')()) await tap('[data-view="home"]');
     await sleep(800);
-    await tap('[data-complete]');                          // Complete on the first active task
+    await tap(await waitFor(() => gymBtn('data-complete')));   // Complete on the gym task
 
     for (let attempt = 0; attempt < 3; attempt++) {
       await waitFor(q('#btn-capture'));
@@ -258,8 +264,8 @@
 
     // 2. the timer runs down to a minute
     await waitFor(q('[data-bail]'));
-    const id = (await waitFor(q('[data-bail]'))).dataset.bail;
-    say('Only a minute left and you are truly stuck. Normally the stake would go to charity.', '⏳');
+    const id = (await waitFor(() => gymBtn('data-bail'))).dataset.bail;
+    say('Only a minute left, the gym is closing and you are truly stuck. Normally the stake would go to charity.', '⏳');
     st(`(function (id) { const t = state.tasks.find(x => x.id === id); t.deadline = Date.now() + 60000; saveState(); renderAll(); })(${JSON.stringify(id)})`);
     await sleep(5000);
 
@@ -282,7 +288,7 @@
     await tap('#btn-open-guide');                          // Get ideas
 
     // the chat asks about right now: mood, place, time, direction
-    const answers = [0, 0, 1, 1];
+    const answers = [0, 1, 2, 0];                          // full of energy, out and about, an hour, more of what I do (gym)
     const chip = () => [...d.querySelectorAll('#guide-chips .chip')].find(c => !c.disabled && !c.dataset.end && visible(c));
     for (let i = 0; i < answers.length; i++) {
       const first = await waitFor(chip, 15000);
