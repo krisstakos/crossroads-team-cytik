@@ -9,9 +9,12 @@ const pad = n => String(n).padStart(2, '0');
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmtMoney = n => '$' + (Number.isInteger(n) ? n.toLocaleString('en-US') : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 // Economics: a stake below the minimum is not worth the payment fees; a ticket costs half the minimum stake.
-const MIN_STAKE = 10, TICKET_PRICE = 1;
+const MIN_STAKE = 10, TICKET_PRICE = 0.5;
 const TICKET_PACKS = [1, 3, 5];
-const RETRIES_PER_MONTH = 4, RETRY_PRICE = 1;
+const RETRIES_PER_MONTH = 4, RETRY_PRICE = 0.25;
+// Pack prices in dollars. Bigger packs cost less per item, and a retry costs half as much as a ticket.
+const PACK_PRICES = { bail: { 1: 0.5, 3: 1, 5: 1.5 }, retry: { 1: 0.25, 3: 0.5, 5: 0.75 } };
+const packCost = (n, kind) => PACK_PRICES[kind][n];
 const RETRY_PACKS = [1, 3, 5];
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
 
@@ -677,9 +680,9 @@ const plural = (n, [one, many]) => (n === 1 ? one : many);
 function shopItemHTML(it) {
   const price = it.price();
   const packs = it.packs.map(n => {
-    const cost = n * price;
+    const cost = packCost(n, it.id);
     return `<div class="shop-pack">
-      <div><b>${n} ${plural(n, it.unit)}</b><small>${fmtMoney(cost)}${n > 1 ? ` · ${fmtMoney(price)} each` : ''}</small></div>
+      <div><b>${n} ${plural(n, it.unit)}</b><small>${fmtMoney(cost)}${n > 1 ? ` · save ${fmtMoney(n * price - cost)}` : ''}</small></div>
       <button class="btn ghost sm" ${it.buyAttr}="${n}" ${cost > spendable() ? 'disabled' : ''}>Buy</button>
     </div>`;
   }).join('');
@@ -691,7 +694,7 @@ function shopItemHTML(it) {
     </header>
     <p class="shop-status">${it.sub()}</p>
     <ul class="shop-how">${it.how.map(h => `<li>${h}</li>`).join('')}</ul>
-    <p class="shop-price-line">${fmtMoney(price)} each, from your balance</p>
+    <p class="shop-price-line">${fmtMoney(price)} each, less in bigger packs</p>
     <div class="shop-packs">${packs}</div>
   </section>`;
 }
@@ -731,7 +734,7 @@ function renderShop() {
 }
 
 function buyRetries(n) {
-  const cost = n * RETRY_PRICE;
+  const cost = packCost(n, 'retry');
   if (!RETRY_PACKS.includes(n)) return;
   if (cost > spendable()) { toast(`Not enough balance (${fmtMoney(spendable())})`, 'error'); return; }
   state.balance -= cost;
@@ -743,7 +746,7 @@ function buyRetries(n) {
 }
 
 function buyTickets(n) {
-  const cost = n * TICKET_PRICE;
+  const cost = packCost(n, 'bail');
   if (!TICKET_PACKS.includes(n)) return;
   if (cost > spendable()) { toast(`Not enough balance (${fmtMoney(spendable())})`, 'error'); return; }
   state.balance -= cost;
