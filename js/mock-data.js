@@ -18,6 +18,13 @@ const MOCK = (function () {
     '🌿': ['houseplants', 'watering can']
   };
 
+  // Predefined "camera" photos for the mock viewfinder, keyed by task icon (see img/proof/CREDITS.md).
+  const SNAPS = {
+    '🏋️': ['gym', 'gym2', 'gym3'], '🍳': ['cook', 'cook2', 'cook3'], '💻': ['work'], '🧹': ['clean', 'clean2', 'clean3', 'clean4'],
+    '📚': ['read', 'study', 'study2'], '🏃': ['run', 'run2'], '🧘': ['stretch', 'stretch2']
+  };
+  const SNAP_FALLBACK = ['study'];
+
   const NOTES_PASS = [
     'Natural lighting and consistent scene geometry.',
     'No signs of editing, screenshots or image reuse detected.',
@@ -46,14 +53,28 @@ const MOCK = (function () {
     };
   }
 
+  // Mock "snapped" proof photos for completed history tasks (see img/proof/CREDITS.md).
+  const PROOF_IMAGES = {
+    h1: { image: 'img/proof/stretch.jpg', conf: 94 },
+    h2: { image: 'img/proof/run.jpg',     conf: 91 },
+    h3: { image: 'img/proof/study.jpg',   conf: 88 },
+    h5: { image: 'img/proof/gym.jpg',     conf: 96 },
+    h6: { image: 'img/proof/read.jpg',    conf: 90 },
+    h8: { image: 'img/proof/cook.jpg',    conf: 87 },
+    h9: { image: 'img/proof/work.jpg',    conf: 93 }
+  };
+
   // Past results so History and the charity totals have something to show.
   function history(now) {
     const H = 3600000, D = 86400000;
     const past = (id, name, icon, penalty, ago, status, charityId) => {
       const at = now - ago;
       const t = { id, name, icon, status, penalty, createdAt: at - 2 * H, durationMs: 2 * H, deadline: at };
-      if (status === 'completed') t.completedAt = at - 25 * 60000;
-      else { t.failedAt = at; t.charged = penalty; t.charityId = charityId; }
+      if (status === 'completed') {
+        t.completedAt = at - 25 * 60000;
+        const p = PROOF_IMAGES[id];
+        if (p) t.proof = { image: p.image, ai: { verdict: 'verified', confidence: p.conf, at: t.completedAt } };
+      } else { t.failedAt = at; t.charged = penalty; t.charityId = charityId; }
       return t;
     };
     const bailed = (id, name, icon, penalty, ago) => {
@@ -134,5 +155,5 @@ const MOCK = (function () {
       : { verdict: 'rejected', confidence: 22 + Math.floor(Math.random() * 40), detected: ['unclear scene'], note: pick(NOTES_FAIL) };
   }
 
-  return { EMOJIS, DETECTIONS, NOTES_PASS, NOTES_FAIL, seedState, freshState, charities, verifyProof, SEED_VERSION };
+  return { EMOJIS, DETECTIONS, SNAPS, SNAP_FALLBACK, NOTES_PASS, NOTES_FAIL, seedState, freshState, charities, verifyProof, SEED_VERSION };
 })();

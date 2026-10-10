@@ -139,6 +139,40 @@ const selectedCharity = () => state.charities.find(c => c.id === state.selectedC
 function isMobile() {
   return /Mobi|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && window.innerWidth < 900);
 }
+// Inside the phone.html frame (or with ?mockcam) the camera is mocked: a predefined photo stands in for the viewfinder.
+const MOCK_CAMERA = window.top !== window || /[?&]mockcam\b/.test(location.search);
+const SNAP_WORDS = [
+  [/gym|workout|lift|weights?|exercise/i, '🏋️'], [/run|jog/i, '🏃'], [/cook|dinner|lunch|breakfast|meal/i, '🍳'],
+  [/clean|tidy|vacuum|laundry|home|room/i, '🧹'], [/read|book|study|learn/i, '📚'], [/work|code|app|laptop|write/i, '💻'],
+  [/yoga|stretch|meditat/i, '🧘']
+];
+function mockSnapFor(t) {
+  const icon = (t.icon || '').replace(/\uFE0F/g, '');
+  const key = Object.keys(MOCK.SNAPS).find(k => k.replace(/\uFE0F/g, '') === icon)
+    || (SNAP_WORDS.find(([re]) => re.test(t.name)) || [])[1];
+  const pool = MOCK.SNAPS[key] || (() => {   // unknown task: stable pick by name, not one photo for all
+    const all = Object.values(MOCK.SNAPS).flat();
+    return [all[[...(t.name || '')].reduce((h, c) => h + c.charCodeAt(0), 0) % all.length]];
+  })();
+  return `img/proof/${pool[Math.floor(Math.random() * pool.length)]}.jpg`;
+}
+
+// Handheld-camera wobble for the mock viewfinder: layered sines, slightly zoomed so edges never show.
+let mockShakeRaf = 0;
+function startMockShake() {
+  const view = $('#pf-mock-view');
+  const t0 = performance.now();
+  cancelAnimationFrame(mockShakeRaf);
+  const tick = now => {
+    const t = (now - t0) / 1000;
+    const x = 5 * Math.sin(t * 1.3) + 2.5 * Math.sin(t * 3.1 + 1) + 1 * Math.sin(t * 7.3);
+    const y = 4 * Math.sin(t * 1.7 + 2) + 2 * Math.sin(t * 3.7) + 0.8 * Math.sin(t * 8.1 + 1);
+    const r = 0.5 * Math.sin(t * 1.1 + 0.5) + 0.25 * Math.sin(t * 2.9);
+    view.style.transform = `translate(${x}px,${y}px) rotate(${r}deg) scale(1.1)`;
+    mockShakeRaf = requestAnimationFrame(tick);
+  };
+  mockShakeRaf = requestAnimationFrame(tick);
+}
 const hasCamera = () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 
 /* ---------- theme: auto (follows the device), light or dark ---------- */
@@ -1130,6 +1164,13 @@ function showPfStage(name) {
 }
 
 async function startCamera() {
+  if (MOCK_CAMERA) {
+    $('#pf-mock-view').src = mockSnapFor(taskById(pf.taskId));
+    $('#pf-mock-view').classList.remove('hidden');
+    $('#pf-camera-error').classList.add('hidden');
+    startMockShake();
+    return;
+  }
   const video = $('#pf-video');
   const errBox = $('#pf-camera-error');
   try {
@@ -1145,12 +1186,28 @@ async function startCamera() {
 }
 
 function stopCamera() {
+  cancelAnimationFrame(mockShakeRaf);
   if (pf.stream) { pf.stream.getTracks().forEach(tr => tr.stop()); pf.stream = null; }
   const v = $('#pf-video');
   if (v) v.srcObject = null;
 }
 
+async function captureMock() {
+  const view = $('#pf-mock-view');
+  const flash = $('#pf-flash');
+  flash.classList.remove('on'); void flash.offsetWidth; flash.classList.add('on');
+  await sleep(180);
+  const w = Math.min(900, view.naturalWidth), h = Math.round(view.naturalHeight * w / view.naturalWidth);
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(view, 0, 0, w, h);
+  pf.image = canvas.toDataURL('image/jpeg', 0.85);
+  stopCamera();
+  runAnalysis();
+}
+
 function captureFromVideo() {
+  if (MOCK_CAMERA) { captureMock(); return; }
   const video = $('#pf-video');
   if (!video.videoWidth) { toast('Camera not ready yet', 'error'); return; }
   const maxW = 900;
@@ -1423,6 +1480,7 @@ function bindEvents() {
   $('#btn-done-close').addEventListener('click', closeCelebration);
   $('#overlay-done').addEventListener('click', e => { if (e.target.id === 'overlay-done') closeCelebration(); });
   $('#btn-cancel-add').addEventListener('click', closeAddTask);
+  $('#btn-add-guide').addEventListener('click', () => { closeAddTask(); $('#btn-open-guide').click(); });
   $('#overlay-add').addEventListener('click', e => { if (e.target.id === 'overlay-add') closeAddTask(); });
   $('#add-task-form').addEventListener('submit', submitAddTask);
   $('#at-name').addEventListener('input', () => { refine = { base: $('#at-name').value.trim(), picks: {} }; renderRefine(); });   // typing starts the questions over
