@@ -126,6 +126,8 @@ const ONBOARDING = (function () {
           <i class="tile-check" aria-hidden="true"></i>
         </button>
         <div class="p-offer"><b>${esc(r.offer)}</b>${r.was ? `<s>${esc(r.was)}</s>` : ''}</div>
+        <div class="p-map hidden">${GUIDE.partnerWhere(r)}</div>
+        ${GUIDE.partnerWhere(r) ? '<button type="button" class="link-btn p-route" data-route-toggle aria-expanded="false">Details</button>' : ''}
         <small class="p-terms">${esc(r.terms)} Code <b>${esc(r.code)}</b></small>
       </article>`;
     const cards = picks.map((r, i) => r.partner ? partnerCard(r, i) : `
@@ -296,6 +298,8 @@ const ONBOARDING = (function () {
       if (t) return choose(t.dataset.v);
       const p = e.target.closest('[data-pick]');
       if (p) { dismissGuide(); return togglePick(+p.dataset.pick); }
+      const rt = e.target.closest('[data-route-toggle]');
+      if (rt) return GUIDE.toggleRoute(rt);
       const h = e.target.closest('[data-pick-help]');
       if (h) { dismissGuide(); const r = picks[+h.dataset.pickHelp]; openHelp({ name: r.name }, r.h * 60 + r.m, prefs()); }
     });

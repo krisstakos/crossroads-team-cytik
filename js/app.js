@@ -1027,7 +1027,7 @@ async function updateAddAssist() {
   const [where, help] = await Promise.all([ASSIST.whereFor(task, mins, prefsFromProfile()), ASSIST.load(task, mins, prefsFromProfile())]);
   if (token !== assistToken) return;            // a newer edit already replaced this answer
   box.classList.toggle('hidden', !where);
-  box.innerHTML = where ? `${ASSIST.whereHTML(where, true)}${help ? '<button type="button" class="link-btn" id="at-assist-more">See details</button>' : ''}` : '';
+  box.innerHTML = where ? `${ASSIST.whereHTML(where, true, true)}${help ? '<button type="button" class="link-btn" id="at-assist-more">See details</button>' : ''}` : '';
 }
 
 // Set the time limit from a number of minutes: a matching preset lights up, anything else opens the custom fields.

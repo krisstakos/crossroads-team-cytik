@@ -150,8 +150,15 @@ const ASSIST = (function () {
     } else if (kind === 'cook') {
       const shop = nearestFirst(SHOPS)[0];
       venue = atHome('Cook in your own kitchen; shop first if you are missing anything.', [`Groceries: ${shop.name}, ${shop.km} km, ${openStatus(shop.open, shop.close, ctx.now || new Date()).text.toLowerCase()}`], null, [`Shop: ${shop.name}`]);
+      venue.errand = { name: shop.name, distance: distText(shop.km), glyph: 'shop', label: 'Groceries' };
     } else if (HOME_RE.test((task && task.name) || '')) {
       venue = atHome('Nothing to book or travel to.', ['No travel needed']);
+      const n = (task && task.name) || '';
+      const e = /\b(plants?|water)\b/i.test(n) ? { name: 'Green Corner Garden Centre', km: 0.6, glyph: 'plants' }
+        : /\bvitamins?\b/i.test(n) ? { name: 'Corner Pharmacy', km: 0.4, glyph: 'pharmacy' }
+        : { name: 'HomeBase Supplies', km: 0.9, glyph: 'shop' };                 // cleaning, laundry, dishes, decluttering
+      venue.errand = { name: e.name, distance: distText(e.km), glyph: e.glyph };
+      venue.facts = [`Supplies: ${e.name}, ${e.km} km`, 'No travel needed'];
     }
     return venue ? { kind: kind || 'home', sample: true, venue, alt: venue.alt || null } : null;
   }
@@ -278,20 +285,90 @@ const ASSIST = (function () {
 
   /* ---------- rendering ---------- */
   // The best place to do the task. Compact (on cards): just the name and distance. Full (help sheet): the reasons too.
-  function whereHTML(w, compact) {
+
+  /* ---------- mock map ---------- */
+  // A drawn street map, not real data: the same place name always gives the same layout.
+  // You are the dot on the left, the venue is the pin, and the dashed line follows the streets between them.
+  // The pin carries a glyph for the kind of place, and a run gets a loop through a park instead of a street route.
+  const PIN_GLYPH = {
+    gym:      '<path d="M3 9v6M6.5 7v10M17.5 7v10M21 9v6M6.5 12h11" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>',
+    run:      '<path d="M13.5 3 5 14h6l-1 7 9-12h-6z" fill="#fff"/>',
+    study:    '<path d="M4 5.5h6A2 2 0 0 1 12 7.5v12a2 2 0 0 0-2-2H4zM20 5.5h-6A2 2 0 0 0 12 7.5v12a2 2 0 0 1 2-2h6z" fill="#fff"/>',
+    work:     '<path d="M4.5 20.5V8.5l7.5-4.5 7.5 4.5v12zM9.5 20.5v-5.5h5v5.5" fill="#fff" fill-rule="evenodd"/>',
+    yoga:     '<path d="M12 4c2.4 3 2.4 7.5 0 11-2.4-3.5-2.4-8 0-11zM4.5 9c4.2-.2 7.5 2.8 7.5 7.5-4.2.2-7.5-2.8-7.5-7.5zM19.5 9c-4.2-.2-7.5 2.8-7.5 7.5 4.2.2 7.5-2.8 7.5-7.5z" fill="#fff"/>',
+    art:      '<path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.6 0 2.2-1 1.7-2.1s0-2.2 1.6-2.2h2A3.2 3.2 0 0 0 20.5 12c0-4.7-3.8-8.5-8.5-8.5z" fill="#fff"/>',
+    shop:     '<path d="M3 4h3l2.5 11h9L20 7H7" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="19" r="1.7" fill="#fff"/><circle cx="17" cy="19" r="1.7" fill="#fff"/>',
+    plants:   '<path d="M5 19C5 10 10 5 20 5c0 10-5 15-15 14z" fill="#fff"/>',
+    pharmacy: '<path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="3.6" stroke-linecap="round"/>'
+  };
+  function seeded(str) {
+    let h = 2166136261;
+    for (const c of str) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+    return () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909)) >>> 0) / 4294967296;
+  }
+  // opts: { kind: glyph key, loop: label for a run loop, tall: bigger map }
+  function mapHTML(name, distance, opts) {
+    const o = opts === true ? { tall: true } : (opts || {});
+    const rnd = seeded(String(name));
+    const W = 300, H = o.tall ? 170 : 110, f = n => n.toFixed(1);
+    const yx = 34 + rnd() * 30, yy = H * (0.62 + rnd() * 0.22);          // you
+    let px = 190 + rnd() * 80, py = H * (0.16 + rnd() * 0.24);            // the venue
+    if (o.loop) { px = 150; py = H * 0.5; }                               // a run starts at the left edge of the loop
+    const roadsX = [yx, px, 20 + rnd() * 60 + 90, 250 + rnd() * 30].filter((v, i, a) => a.findIndex(w => Math.abs(w - v) < 16) === i);
+    const roadsY = [yy, py, H * (0.4 + rnd() * 0.2)].filter((v, i, a) => a.findIndex(w => Math.abs(w - v) < 14) === i);
+    // scenery: each place gets a different mix, so maps do not look alike
+    const pick = rnd();
+    let scenery = '';
+    if (o.loop) scenery += `<rect class="map-park" x="${px + 4}" y="${H * 0.14}" width="${W - px - 24}" height="${H * 0.72}" rx="22"/>`;
+    else if (pick < 0.34) scenery += `<path class="map-water" d="M${W} ${H * 0.45}C${W - 40} ${H * 0.5} ${W - 60} ${H * 0.8} ${W - 110} ${H}L${W} ${H}z"/>`;
+    else if (pick < 0.67) scenery += `<rect class="map-park" x="${90 + rnd() * 20}" y="${H * 0.52}" width="64" height="${H * 0.3}" rx="10"/>`;
+    else scenery += `<path class="map-rail" d="M0 ${H * 0.9}L${W} ${H * 0.72}"/>`;
+    for (let i = 0; i < 6; i++) {                                           // a few building blocks
+      const bx = 8 + rnd() * (W - 40), by = 8 + rnd() * (H - 30);
+      if (Math.abs(bx - px) < 26 || Math.abs(by - yy) < 14 || Math.abs(bx - yx) < 24) continue;
+      scenery += `<rect class="map-block" x="${f(bx)}" y="${f(by)}" width="${f(12 + rnd() * 14)}" height="${f(8 + rnd() * 10)}" rx="2"/>`;
+    }
+    const roads = roadsX.map(x => `<path class="map-road" d="M${f(x)} 0V${H}"/>`).join('') + roadsY.map(y => `<path class="map-road" d="M0 ${f(y)}H${W}"/>`).join('');
+    const label = distance ? String(distance).split(',')[0] : '';
+    const route = `<path class="map-route" d="M${f(yx)} ${f(yy)}H${f(px)}${o.loop ? '' : `V${f(py + 4)}`}"/>`;
+    const loop = o.loop ? `<ellipse class="map-route loop" cx="${f(px + (W - px - 24) / 2 + 4)}" cy="${f(H * 0.5)}" rx="${f((W - px - 24) / 2 - 8)}" ry="${f(H * 0.26)}"/>` : '';
+    const mx = (yx + px) / 2, my = yy;
+    const pill = (x, y, t) => `<g transform="translate(${f(x)} ${f(y)})"><rect class="map-pill" x="${-(t.length * 2.9 + 8)}" y="-9" width="${f(t.length * 5.8 + 16)}" height="18" rx="9"/><text class="map-pilltext" y="4" text-anchor="middle">${esc(t)}</text></g>`;
+    const glyph = PIN_GLYPH[o.kind] ? `<g transform="translate(0 -21) scale(.46) translate(-12 -12)">${PIN_GLYPH[o.kind]}</g>` : '<circle class="map-pin-dot" cy="-21" r="4.5"/>';
+    return `<div class="map" role="img" aria-label="Sample map: route from you to ${esc(name)}${distance ? ', ' + esc(distance) : ''}">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <rect class="map-bg" width="${W}" height="${H}"/>${scenery}${roads}${loop}${route}
+        <circle class="map-you-halo" cx="${f(yx)}" cy="${f(yy)}" r="11"/><circle class="map-you" cx="${f(yx)}" cy="${f(yy)}" r="5.5"/>
+        <text class="map-tag" x="${f(yx)}" y="${f(yy + 24)}" text-anchor="middle">You</text>
+        ${label ? pill(mx, my - 14, label) : ''}${o.loop ? pill(px + (W - px - 24) / 2 + 4, H * 0.5, o.loop) : ''}
+        <g transform="translate(${f(px)} ${f(py)})"><path class="map-pin" d="M0 0C-9-10-12-15-12-21a12 12 0 0 1 24 0C12-15 9-10 0 0z"/>${glyph}</g>
+      </svg><span class="map-note">Sample map</span></div>`;
+  }
+
+  // What to draw for a place: its kind gives the pin glyph, and a run draws its loop.
+  const GLYPH_OF = { gym: 'gym', run: 'run', study: 'study', work: 'work', yoga: 'yoga', art: 'art' };
+  function mapFor(w, tall) {
+    const v = w && w.venue;
+    if (!v) return '';
+    if (v.home) return v.errand ? `<p class="map-cap">${esc(v.errand.label || 'Supplies')}: <b>${esc(v.errand.name)}</b></p>${mapHTML(v.errand.name, v.errand.distance, { kind: v.errand.glyph, tall })}` : '';
+    if (!v.distance) return '';
+    return mapHTML(v.name, v.distance, { kind: GLYPH_OF[w.kind], tall, loop: w.kind === 'run' ? v.key && v.key[0] : null });
+  }
+
+  function whereHTML(w, compact, withMap) {
     if (!w) return '';
     const v = w.venue;
     const pin = '<svg class="ico pin" aria-hidden="true"><use href="#i-pin"/></svg>';
     if (compact) {
       const km = v.distance ? v.distance.split(',')[0] : '';
-      return `<div class="where compact">${pin}<p><b>${esc(v.name)}</b>${km ? ` <span class="sub">${esc(km)}</span>` : ''}</p></div>`;
+      return `<div class="where-wrap"><div class="where compact">${pin}<p><b>${esc(v.name)}</b>${km ? ` <span class="sub">${esc(km)}</span>` : ''}</p></div>${withMap ? mapFor(w) : ''}</div>`;
     }
-    return `<div class="where">${pin}<div class="where-body">
+    return `<div class="where-wrap"><div class="where">${pin}<div class="where-body">
       <p class="where-title"><b>${esc(v.name)}</b>${v.home ? '' : '<span class="nearest">Best match</span>'}</p>
       ${v.distance ? `<p class="where-sub">${esc(v.distance)}</p>` : ''}
       ${v.facts.length ? `<p class="where-facts">${esc(v.facts.join(', '))}</p>` : ''}
       <p class="where-why">${esc(v.reason)}</p>
-    </div></div>`;
+    </div></div>${mapFor(w, true)}</div>`;
   }
 
   function placeHTML(p, i) {
@@ -322,7 +399,7 @@ const ASSIST = (function () {
     const pills = v && v.key && v.key.length ? `<div class="badges">${v.key.map(k => `<span class="badge">${esc(k)}</span>`).join('')}</div>` : '';
     const best = v ? `<div class="where">${pin}<div class="where-body">
         <p class="where-title"><b>${esc(v.name)}</b></p>${v.distance ? `<p class="where-sub">${esc(v.distance.split(',')[0])}</p>` : ''}${pills}
-      </div></div>` : '';
+      </div></div>${mapFor(help.where, true)}` : '';
     const recipe = help.recipe ? `<p class="help-line"><b>${esc(help.recipe.name)}</b> <span class="sub">${help.recipe.mins} min, ${money(help.recipe.cost)}</span></p>` : '';
     const more = `${v ? `<p class="where-why">${esc(v.reason)}</p>` : ''}
       ${help.plan ? `<p class="help-plan">${esc(help.plan)}</p>` : ''}
@@ -331,7 +408,7 @@ const ASSIST = (function () {
       <p class="help-proof">Photo: ${esc(help.proof.replace(/^Photograph /, '').replace(/\.$/, ''))}</p>`;
     return `<div class="help-head"><h3 id="help-title">${esc(help.title)}</h3>${help.sample ? '<span class="sample-tag">Sample</span>' : ''}</div>
       ${best}${recipe}
-      <details class="help-more"><summary>More</summary>${more}</details>`;
+      <div class="help-more">${more}</div>`;
   }
 
   /* ---------- follow-up questions for a custom task ---------- */
@@ -366,5 +443,5 @@ const ASSIST = (function () {
     return kind ? ASKS[kind] : HOME_RE.test(name) ? HOME_ASKS : OTHER_ASKS;
   }
 
-  return { kindOf, load, whereFor, whereHTML, fullHTML, setProvider, questionsFor };
+  return { kindOf, load, whereFor, whereHTML, mapHTML, mapFor, fullHTML, setProvider, questionsFor };
 })();

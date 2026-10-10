@@ -264,6 +264,16 @@ const GUIDE = (function () {
     { id: 'nook',      name: 'Nook Cowork',        icon: IC.code,  glyph: 'building', color: ['#4dabf7', '#1864ab'], offer: 'Free focus day',           detail: 'A quiet desk and fast wifi for the day.',         terms: 'One free day per person.',       task: 'Focus day at Nook Cowork',     mins: 120, code: 'NOOK-DAY' },
     { id: 'tidykit',   name: 'TidyKit Supplies',   icon: IC.tidy,  glyph: 'sparkle',  color: ['#63e6be', '#087f5b'], offer: 'Free starter kit',         detail: 'Cloths, spray and gloves with your first order.', terms: 'While stocks last.',             task: 'Deep clean with TidyKit',      mins: 60,  code: 'TIDY-KIT' }
   ];
+  const PARTNER_KM = { ironworks: 0.5, lotus: 0.7, stride: 1.1, pageturn: 0.4, freshcrate: 0.0, bloom: 0.9, canvas: 1.2, nook: 0.8, tidykit: 0.6 };
+  const PARTNER_GLYPH = { ironworks: 'gym', lotus: 'yoga', stride: 'run', pageturn: 'study', bloom: 'plants', canvas: 'art', nook: 'work', tidykit: 'shop' };
+  const partnerWhere = p => (PARTNER_KM[p.id] ? ASSIST.mapHTML(p.name, `${PARTNER_KM[p.id]} km, ${Math.max(1, Math.round(PARTNER_KM[p.id] * 12))} min walk`, { kind: PARTNER_GLYPH[p.id] }) : '');
+  // Reveal or hide the route inside a partner card
+  function toggleRoute(btn) {
+    const slot = btn.closest('article').querySelector('.p-map');
+    const show = slot.classList.toggle('hidden') === false;
+    btn.setAttribute('aria-expanded', show);
+    btn.textContent = show ? 'Hide route' : 'Details';
+  }
   const logoSVG = p => `<span class="p-logo" aria-hidden="true" style="--c1:${p.color[0]};--c2:${p.color[1]}"><svg viewBox="0 0 24 24">${GLYPH[p.glyph]}</svg></span>`;
 
   // Prefer partners that fit the ideas just picked, then the user's habits (or something new, if they asked for that).
@@ -285,8 +295,9 @@ const GUIDE = (function () {
       <div class="p-head">${logoSVG(p)}<div><h3>${esc(p.name)}</h3><small>${esc(p.detail)}</small></div></div>
       <div class="p-offer"><b>${esc(p.offer)}</b>${p.was ? `<s>${esc(p.was)}</s>` : ''}</div>
       <div class="reco-meta"><div><b>${len}</b></div><div><b>${fmtMoney(p.stake)}</b></div></div>
+      <div class="p-map hidden">${partnerWhere(p)}</div>
       <small class="p-terms">${esc(p.terms)} Code <b>${esc(p.code)}</b></small>
-      <div class="card-actions"><button class="btn primary sm" data-guide-claim="${i}">Claim offer</button></div>
+      <div class="card-actions"><button class="btn primary sm" data-guide-claim="${i}">Claim offer</button>${PARTNER_KM[p.id] ? `<button class="btn ghost sm" data-route-toggle aria-expanded="false">Details</button>` : ''}</div>
     </article>`;
   }
 
@@ -541,6 +552,8 @@ const GUIDE = (function () {
     log().addEventListener('click', e => {
       const h = e.target.closest('[data-guide-help]');
       if (h) { const r = results[+h.dataset.guideHelp]; if (r) openHelp({ name: r.name }, r.h * 60 + r.m, ctx); return; }
+      const rt = e.target.closest('[data-route-toggle]');
+      if (rt) return toggleRoute(rt);
       const c = e.target.closest('[data-guide-claim]');
       if (c) {
         const p = partnerPicks[+c.dataset.guideClaim];
@@ -564,5 +577,5 @@ const GUIDE = (function () {
   }
 
   document.addEventListener('DOMContentLoaded', bind);
-  return { open, close, suggest, suggestNext, suggestPartners, PARTNERS, logoSVG, matchOption, buildPlan, FLOW, STEPS, AREA, BLOCKER, WHEN, TIME, STAKE, UNSURE, ENERGY };
+  return { open, close, suggest, suggestNext, suggestPartners, PARTNERS, logoSVG, partnerWhere, toggleRoute, matchOption, buildPlan, FLOW, STEPS, AREA, BLOCKER, WHEN, TIME, STAKE, UNSURE, ENERGY };
 })();
