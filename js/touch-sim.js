@@ -2,11 +2,11 @@
 (function(){
   if(window.top===window)return;
   var root=document.documentElement;
-  var dot=document.createElement("div");
+  var dot=document.createElement("div");dot.id="touch-dot";
   dot.style.cssText="position:fixed;left:0;top:0;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:rgba(128,128,128,.35);border:1.5px solid rgba(255,255,255,.7);pointer-events:none;z-index:99999;opacity:0;transform:scale(.6);transition:transform .12s,opacity .12s";
   document.body.appendChild(dot);
   var st=document.createElement("style");
-  st.textContent="html.embedded,html.embedded *{cursor:none!important}html.embedded{user-select:none}html.embedded input,html.embedded textarea{user-select:text}";
+  st.textContent="html.embedded,html.embedded *{cursor:none!important}html.embedded{user-select:none}html.embedded input,html.embedded textarea{user-select:text}html.demo-playing #touch-dot{display:none!important}";
   document.head.appendChild(st);
 
   function place(e){dot.style.left=e.clientX+"px";dot.style.top=e.clientY+"px"}
