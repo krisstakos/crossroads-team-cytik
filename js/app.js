@@ -533,6 +533,10 @@ const defaultRetryMs = t => Math.min(7 * 86400000, Math.max(15 * 60000, t.durati
 // "Same length", plus 1h, 4h and 24h, without duplicates, shortest first.
 const retryChoices = t => [...new Set([defaultRetryMs(t), 3600000, 4 * 3600000, 24 * 3600000])].sort((a, b) => a - b);
 
+// Stakes held for an open offer can't be spent on tickets or new tasks until the offer ends.
+const heldStake = () => state.tasks.filter(t => t.status === 'offer').reduce((sum, t) => sum + t.penalty, 0);
+const spendable = () => Math.max(0, state.balance - heldStake());
+
 function failTask(t) {
   if ((t.attempt || 1) < 2) {
     const expires = t.deadline + OFFER_MS;                           // the window starts at the deadline, not when the miss is noticed
@@ -597,16 +601,16 @@ function renderShop() {
     const cost = n * TICKET_PRICE;
     return `<div class="shop-pack">
       <div><b>${n} ticket${n > 1 ? 's' : ''}</b><small>${fmtMoney(cost)}</small></div>
-      <button class="btn ghost sm" data-buy="${n}" ${cost > state.balance ? 'disabled' : ''}>Buy</button>
+      <button class="btn ghost sm" data-buy="${n}" ${cost > spendable() ? 'disabled' : ''}>Buy</button>
     </div>`;
   }).join('');
-  $('#shop-note').textContent = state.balance < TICKET_PRICE ? 'Add funds in Settings to buy tickets.' : '';
+  $('#shop-note').textContent = spendable() < TICKET_PRICE ? 'Add funds in Settings to buy tickets.' : '';
 }
 
 function buyTickets(n) {
   const cost = n * TICKET_PRICE;
   if (!TICKET_PACKS.includes(n)) return;
-  if (cost > state.balance) { toast(`Not enough balance (${fmtMoney(state.balance)})`, 'error'); return; }
+  if (cost > spendable()) { toast(`Not enough balance (${fmtMoney(spendable())})`, 'error'); return; }
   state.balance -= cost;
   state.tickets += n;
   pushActivity('🎫', `Bought ${n} bail-out ticket${n > 1 ? 's' : ''} for ${fmtMoney(cost)}`, 'ticket');
@@ -618,6 +622,7 @@ function buyTickets(n) {
 function acceptOffer(id) {
   const t = taskById(id);
   if (!t || t.status !== 'offer') return;
+  if (Date.now() >= t.offerExpiresAt) { chargeMiss(t, false); renderAll(); return; }   // it lapsed between ticks
   const ms = t.offerChoiceMs || defaultRetryMs(t), now = Date.now();
   t.status = 'active';
   t.attempt = 2;
@@ -921,7 +926,7 @@ function submitAddTask(e) {
   if (penalty < MIN_STAKE) { toast(`Minimum stake is ${fmtMoney(MIN_STAKE)}`, 'error'); return; }
   const when = computeDeadline();
   if (!when.ok) { toast(when.error, 'error'); return; }
-  if (penalty > state.balance) { toast(`Stake is above your balance (${fmtMoney(state.balance)})`, 'error'); return; }
+  if (penalty > spendable()) { toast(`Stake is above your balance (${fmtMoney(spendable())})`, 'error'); return; }
 
   state.tasks.unshift({
     id: uid(), name, icon: selectedIcon || iconFor(name), status: 'active', byDate: addMode === 'date',
@@ -1397,13 +1402,14 @@ function bindEvents() {
   // typing a length by hand keeps "Custom" selected
   ['#at-hours', '#at-minutes'].forEach(sel => $(sel).addEventListener('input', () => { showCustomDuration(true); }));
 
-  // home list: complete / delete / report + charity select (delegated)
+  // home list: complete / report + charity select (delegated)
   document.addEventListener('click', e => {
     if (e.target.closest('#offer-banner')) { showView('home'); return; }
     const pk = e.target.closest('[data-offer-pick]');
     if (pk) {
       const t = taskById(pk.dataset.offerPick);
       if (t) {
+        if (!retryChoices(t).includes(+pk.dataset.ms)) return;
         t.offerChoiceMs = +pk.dataset.ms; saveState();
         $$(`[data-offer-pick="${t.id}"]`).forEach(c => { const on = c === pk; c.classList.toggle('active', on); c.setAttribute('aria-checked', on); });
       }
